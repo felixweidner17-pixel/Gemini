@@ -1,0 +1,6 @@
+{
+  "summary": "Implementation plan for removing superseded features replaced by the Cannabinoid Library and custom pickers, streamlining navigation to 3 core tabs (Clearance & Log, Cannabinoid Library, Dosage Guide), removing obsolete top ribbon docks and legacy inspectors, and cleaning up superseded components.",
+  "updatedAt": "2026-10-18T14:18:02.126933683Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

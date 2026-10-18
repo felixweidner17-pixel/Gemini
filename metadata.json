@@ -1,0 +1,6 @@
+{
+  "name": "CannaPharm Analytical Workbench",
+  "description": "Clinical cannabinoid pharmacology atlas, receptor potency comparator, harm-reduction dosage calculator, and multi-compartment pharmacokinetic clearance simulator for phytocannabinoids, semi-synthetics, and synthetic agonists.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
