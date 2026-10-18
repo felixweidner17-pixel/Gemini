@@ -221,12 +221,52 @@ export const REAL_MEDICATION_PHOTOS: Record<string, RealMedicationPhotoInfo> = {
     resolution: '2592 × 1944 px',
   },
   cbn: {
-    imageSrc: '/medications/cbd.jpg',
-    badgeLabel: 'Real Pharmaceutical Specimen',
-    pillImprint: 'Cannabinol · Aged Extract',
-    formulation: 'Real amber glass botanical extract bottle',
-    sourceCredit: 'Botanical Clinical Archive',
-    resolution: '3888 × 5184 px',
+    imageSrc: '/medications/cbn.jpg',
+    badgeLabel: 'Real Cannabinoid Specimen',
+    pillImprint: 'Cannabinol · CBN Pure Isolate',
+    formulation: 'Real analytical cannabinoid isolate & crystal specimen',
+    sourceCredit: 'Analytical Laboratory Specimen',
+    resolution: '1280 × 960 px',
+  },
+  cbg: {
+    imageSrc: '/medications/cbg.jpg',
+    badgeLabel: 'Real Cannabinoid Specimen',
+    pillImprint: 'Cannabigerol · CBG Crystalline',
+    formulation: 'Real pure phytocannabinoid isolate crystal formulation',
+    sourceCredit: 'Analytical Laboratory Specimen',
+    resolution: '1280 × 960 px',
+  },
+  '9h-hhc': {
+    imageSrc: '/medications/9h-hhc.jpg',
+    badgeLabel: 'Real Cannabinoid Specimen',
+    pillImprint: '9H-HHC · (9R)-Enriched',
+    formulation: 'Real high-purity hexahydrocannabinol distillate isolate',
+    sourceCredit: 'Analytical Laboratory Specimen',
+    resolution: '1280 × 960 px',
+  },
+  '9h-hhcp': {
+    imageSrc: '/medications/9h-hhcp.jpg',
+    badgeLabel: 'Real Cannabinoid Specimen',
+    pillImprint: '9H-HHCP · Heptyl Chain',
+    formulation: 'Real high-potency hexahydrocannabiphorol concentrate',
+    sourceCredit: 'Analytical Laboratory Specimen',
+    resolution: '1280 × 960 px',
+  },
+  midazolam: {
+    imageSrc: '/medications/midazolam.jpg',
+    badgeLabel: 'Real Pharmaceutical Photo',
+    pillImprint: 'Dormicum · 7.5 / 15 mg Roche',
+    formulation: 'Real pharmaceutical blister foil and scored tablets',
+    sourceCredit: 'Clinical Specimen Archive',
+    resolution: '1280 × 960 px',
+  },
+  dihydrocodeine: {
+    imageSrc: '/medications/dihydrocodein.jpg',
+    badgeLabel: 'Real Pharmaceutical Photo',
+    pillImprint: 'Paracodin · DHC Contin 60 mg',
+    formulation: 'Real pharmaceutical oral tablet formulation',
+    sourceCredit: 'Clinical Specimen Archive',
+    resolution: '1600 × 1200 px',
   },
   oxymorphone: {
     imageSrc: '/medications/oxymorphone.jpg',
@@ -678,6 +718,32 @@ export const SubstancePhotoSpecimen: React.FC<SubstancePhotoSpecimenProps> = ({
           </g>
         );
 
+      case 'midazolam':
+        return (
+          <g>
+            {/* Recognizable Blue-Grey Oblong Scored Dormicum 7.5mg & Glass Ampoule */}
+            <ellipse cx="90" cy="128" rx="66" ry="10" fill="#000000" opacity="0.45" />
+            {/* Blue-Grey Oblong Dormicum Tablet */}
+            <rect x="28" y="60" width="60" height="34" rx="17" fill="#64748B" stroke="#94A3B8" strokeWidth="2" />
+            <line x1="58" y1="60" x2="58" y2="94" stroke="#475569" strokeWidth="1.8" />
+            <text x="43" y="80" textAnchor="middle" className="fill-white text-[8.5px] font-mono font-extrabold">
+              ROCHE
+            </text>
+            <text x="73" y="80" textAnchor="middle" className="fill-cyan-200 text-[8.5px] font-mono font-extrabold">
+              7.5
+            </text>
+            {/* Clear Sedative Glass Ampoule */}
+            <rect x="110" y="44" width="34" height="68" rx="6" fill="rgba(255,255,255,0.25)" stroke="#CBD5E1" strokeWidth="1.5" />
+            <rect x="118" y="32" width="18" height="12" rx="2" fill="#0284C7" />
+            <text x="127" y="74" textAnchor="middle" className="fill-sky-950 text-[7px] font-mono font-extrabold">
+              VERSED
+            </text>
+            <text x="127" y="86" textAnchor="middle" className="fill-slate-800 text-[7px] font-mono font-bold">
+              5 mg/mL
+            </text>
+          </g>
+        );
+
       // ======================== OPIOIDS & OPIATES ========================
       case 'oxycodone':
         return (
@@ -925,6 +991,33 @@ export const SubstancePhotoSpecimen: React.FC<SubstancePhotoSpecimenProps> = ({
             </text>
             <text x="120" y="94" textAnchor="middle" className="fill-slate-900 text-[13px] font-mono font-extrabold">
               3
+            </text>
+          </g>
+        );
+
+      case 'dihydrocodeine':
+        return (
+          <g>
+            {/* Recognizable White Round Scored Paracodin Tablet + Amber Drop Bottle */}
+            <ellipse cx="90" cy="128" rx="66" ry="10" fill="#000000" opacity="0.45" />
+            {/* White Round Scored Tablet */}
+            <circle cx="58" cy="78" r="30" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="2.2" />
+            <line x1="28" y1="78" x2="88" y2="78" stroke="#94A3B8" strokeWidth="1.8" />
+            <text x="58" y="70" textAnchor="middle" className="fill-slate-700 text-[9px] font-mono font-extrabold">
+              DHC
+            </text>
+            <text x="58" y="93" textAnchor="middle" className="fill-slate-700 text-[9px] font-mono font-extrabold">
+              30
+            </text>
+            {/* Amber Dropper Bottle for Paracodin Tropfen */}
+            <rect x="104" y="46" width="46" height="66" rx="8" fill="#78350F" stroke="#B45309" strokeWidth="1.5" />
+            <rect x="115" y="32" width="24" height="14" rx="3" fill="#D97706" />
+            <rect x="108" y="66" width="38" height="34" rx="2" fill="#FEF3C7" />
+            <text x="127" y="80" textAnchor="middle" className="fill-amber-950 text-[7px] font-mono font-extrabold">
+              PARACODIN
+            </text>
+            <text x="127" y="92" textAnchor="middle" className="fill-amber-900 text-[7px] font-mono font-bold">
+              DROPS
             </text>
           </g>
         );

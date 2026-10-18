@@ -1,88 +1,86 @@
-# Streamline App & Remove Superseded Features
+# Implementation Plan: New Substances & Uploaded Real Photos Integration
 
-Prune legacy features replaced by the new Cannabinoid Library and custom dropdown pickers, retiring the old SAR Inspector and Potency Matrix views, discarding the redundant top ribbon dock, and establishing a clean 3-tab iOS navigation contract.
-
-### User Review & Critical Decisions
-
-> [!IMPORTANT]
-> The user confirmed the following decisions during Phase 1 clarification:
-> - **Retire Superseded Views**: Fully remove the old SAR Inspector (`atlas`) and Potency Matrix (`matrix`) views that were superseded by the Cannabinoid Library.
-> - **Remove Old Top Filter Ribbon & Dock**: Discard the legacy horizontal series ribbon, compound pills, and derivative dock from the top of the app, relying on the Cannabinoid Library and the custom iOS-styled `CannabinoidSelect` sheets.
-> - **Streamline Mobile Navigation to 3 Tabs**: Reconfigure the iPhone 17 Pro bottom tab bar to 3 core ergonomic thumb-zone destinations: **Clearance & Log**, **Library**, and **Dosage Guide**.
+Integrate the newly uploaded photographs in `/public/medications/`, establish complete clinical and recreational pharmacology profiles for **Dihydrocodeine** and **Midazolam**, and connect the newly added cannabinoid photographs (**9H-HHC**, **9H-HHCP**, **CBG**, **CBN**) along with updated photos for existing compounds.
 
 ---
 
-### 1. Overview & Core Concept
+## 1. Overview of Detected Photos
 
-- **What It Does**: Refactors the CannaPharm application to eliminate technical and visual debt. All compound browsing, pharmacological descriptions, 9H/OH derivative switching, and visual assets are now centralized in the rich **Cannabinoid Library**. Routine logging and elimination curves live in **Clearance & Log**, while route/tolerance calculations live in the **Dosage Guide**.
-- **Target Persona & Context**: Primary daily mobile user on an iPhone 17 Pro requiring rapid, frictionless dose logging (vaping focus, 0–10s draw duration), real-time clearance estimates based on their specific biometric baseline (55 kg, 172 cm, sedentary), and comprehensive compound reference.
-- **Key Value**: Eliminates UI redundancy and visual noise, shrinks bundle size, speeds up screen transitions, and provides an uncluttered, native iOS 27 mobile experience.
-
----
-
-### 2. User Experience & Visual Design
-
-- **Key User Flows**:
-  1. **Quick Logging**: Open the app directly to **Clearance & Log** (the default primary tab) to log recent vape draws or edible intakes with one-tap suggestions and instant clearance countdowns.
-  2. **Compound Discovery**: Switch to the **Library** tab to explore all cannabinoids with high-fidelity chemical cards, receptor binding profiles, onset/duration metrics, and direct "Log Dose" / "Dosage Guide" action triggers.
-  3. **Dosage Guidance**: Switch to **Dosage Guide** with auto-populated 55 kg / 172 cm / sedentary / vaping defaults and custom iOS bottom-sheet pickers.
-- **Visual Identity & Theme**:
-  - *Aesthetic Direction*: iOS 27 Cupertino Glass — clean translucent chrome (`backdrop-blur-2xl`), SF Pro typographic hierarchy, and Apple system blue (`#007AFF`) and emerald/teal accents.
-  - *Color Palette & Mood*: Strict 60-30-10 distribution: 60% iOS system background (`#F2F2F7`), 30% structural white card surfaces (`bg-white`), and 10% interactive accent colors (`#007AFF`, `#0D9488`).
-  - *Navigation Rhythm*: 
-    - Desktop top bar: 3 concise single-line links (`Clearance & Log`, `Cannabinoid Library`, `Dosage Guide`) with quick Library action button.
-    - Mobile bottom bar: 3 equal touch targets (`grid-cols-3`, $\ge 48\text{px}$ touch hitbox), optimized for one-handed thumb navigation.
-- **Interactive Feedback & Motion**:
-  - Smooth 150ms settling transitions when switching between the 3 main tabs.
-  - Seamless portal-rendered iOS bottom sheet for cannabinoid selection with instant search.
+The `/public/medications/` directory has been inspected, confirming the following user-uploaded image files:
+1. **`dihydrocodein.jpg`** (1.15 MB): High-resolution photo of Dihydrocodeine (Paracodin / DHC) pharmaceutical formulation.
+2. **`midazolam.jpg`** (96 KB): Real clinical photo of Midazolam (Dormicum / Versed).
+3. **`9h-hhc.jpg`** (131 KB): Authentic specimen photo of 9H-HHC.
+4. **`9h-hhcp.jpg`** (133 KB): Authentic specimen photo of 9H-HHCP.
+5. **`cbg.jpg`** (138 KB): Authentic botanical/crystal photo of Cannabigerol (CBG).
+6. **`cbn.jpg`** (119 KB): Authentic pharmaceutical/isolate photo of Cannabinol (CBN).
+7. **`alprazolam.jpg`** (694 KB): User's updated Alprazolam pharmaceutical photo.
+8. **`clonazepam.jpg`** (102 KB): User's updated Clonazepam / Rivotril photo.
+9. **`ketamine.jpg`** (4.96 MB): Ultra-high-resolution Ketamine specimen photo.
+10. **`mdma.jpg`** (782 KB): Authentic MDMA specimen photo.
+11. **`oxycodone.jpg`** (642 KB): User's updated Oxycodone / OxyContin photo.
 
 ---
 
-### 3. Key Product Decisions & Trade-Offs
+## 2. Proposed Changes
 
-- **Retirement of SAR Inspector & Potency Matrix**:
-  - *Chosen Approach*: Remove the `'atlas'` and `'matrix'` routes and delete `CompoundInspector.tsx`, `ComparativeMatrix.tsx`, and `PotencyRadarChart.tsx`.
-  - *Why*: The new `CannabinoidLibrary.tsx` already delivers comprehensive compound summaries, high-fidelity visual cards, receptor affinities (CB1/CB2/GPR55), and 9H/OH variant switching in an accessible format. The old matrix and inspector tabs created clutter and confusion.
-  - *Preserved Elements*: `ChemicalStructure2D.tsx` is preserved as a shared dependency for the Library and the custom `CannabinoidSelect` sheets.
-- **Removal of Legacy Top Compound Ribbon**:
-  - *Chosen Approach*: Strip out the top compound filter ribbon and derivative dock from `App.tsx`.
-  - *Why*: The compound ribbon took up valuable vertical space on mobile and duplicated the purpose of the Cannabinoid Library and custom dropdown selectors.
-- **Strict 3-Tab Mobile Architecture**:
-  - *Chosen Approach*: Modernize mobile bottom navigation to 3 balanced tabs: Clearance, Library, and Dosage.
-  - *Why*: 3 tabs fit comfortably within the natural thumb zone on an iPhone 17 Pro without cramped icons or text truncations.
+### A. Pharmacological Database Expansion (`src/data/cannabinoids.ts`)
+- **Add Dihydrocodeine Profile**:
+  - `id: 'dihydrocodeine'`, name: `Dihydrocodeine (Paracodin · DHC Contin)`, shortName: `Dihydrocodeine`.
+  - Classification: `Opioid Analgesic` (macro: `Prescription Pharmaceuticals`, subgroup: `Opiates & Opioids`).
+  - Molecular Formula: `C18H23NO3`, MW: `301.38 g/mol`, PubChem CID: `5284538`, XLogP: `1.2`.
+  - Receptors: $\mu$-Opioid Receptor (MOR agonist, $K_i \approx 150\text{ nm}$), $\delta$ and $\kappa$ weak affinity.
+  - Elimination Half-life: $t_{1/2} = 4.0\text{ hours}$ (extended release tail up to 12h), active metabolite: Dihydromorphine (CYP2D6).
+  - Oral Dosages: Threshold $10\text{ mg}$, Light $15\text{–}30\text{ mg}$, Moderate $30\text{–}60\text{ mg}$, Strong $60\text{–}120\text{ mg}$.
+  - Clearance Windows: Urine $2\text{–}3\text{ days}$ (cross-reacts on standard opiate immunoassays), Saliva $24\text{–}36\text{ h}$, Blood $12\text{–}24\text{ h}$.
+- **Add Midazolam Profile**:
+  - `id: 'midazolam'`, name: `Midazolam (Dormicum · Versed · Rapid Hypnotic)`, shortName: `Midazolam`.
+  - Classification: `Benzodiazepine` (macro: `Prescription Pharmaceuticals`, subgroup: `Benzodiazepines`).
+  - Molecular Formula: `C18H13ClFN3`, MW: `325.77 g/mol`, PubChem CID: `4192`, XLogP: `3.1`.
+  - Receptors: $\text{GABA}_A$ receptor positive allosteric modulator ($\alpha_1, \alpha_2, \alpha_3, \alpha_5$, $K_i \approx 5\text{ nm}$).
+  - Elimination Half-life: $t_{1/2} = 2.0\text{ hours}$ (ultra-short, rapid hepatic oxidation via CYP3A4 to 1-hydroxymidazolam).
+  - Oral Dosages: Threshold $2.5\text{ mg}$, Light $3.75\text{–}7.5\text{ mg}$, Moderate $7.5\text{–}15\text{ mg}$, Strong $15\text{–}20\text{ mg}$.
+  - Clearance Windows: Urine $1\text{–}2\text{ days}$ (1-hydroxymidazolam glucuronide), Saliva $12\text{–}18\text{ h}$, Blood $6\text{–}12\text{ h}$.
+
+### B. Recreational & Subjective Effects (`src/data/recreationalProfiles.ts`)
+- Add **Dihydrocodeine** recreational profile:
+  - Subjective sensations: Warm euphoric body heaviness, gentle soothing calm, less intense histamine release/itching than codeine, dry mouth, mild miosis.
+  - Duration: Onset 20–30 min, Peak 1.5–2.5 hours, Total duration 4–6 hours.
+  - Risk indicators: High addiction liability, severe respiratory depression when combined with other CNS depressants.
+- Add **Midazolam** recreational profile:
+  - Subjective sensations: Rapid onset hypnotic wave, profound muscle relaxation, rapid anterograde amnesia ("instant time slip"), heavy motor incoordination.
+  - Duration: Onset 10–15 min, Peak 30–60 min, Total duration 2–4 hours.
+  - Risk indicators: High blackout risk, respiratory arrest when combined with opioids/alcohol.
+
+### C. Photo Registration & Badging (`src/components/SubstancePhotoSpecimen.tsx`)
+- Register all 11 user-uploaded photos in `REAL_MEDICATION_PHOTOS`:
+  - `dihydrocodeine`: `/medications/dihydrocodein.jpg`, imprint `Paracodin · DHC 60 / 120 mg`, label `Authentic Dihydrocodeine formulation photo`.
+  - `midazolam`: `/medications/midazolam.jpg`, imprint `Dormicum · 7.5 / 15 mg (Roche)`, label `Authentic Midazolam packaging & blister photo`.
+  - `9h-hhc`: `/medications/9h-hhc.jpg`, imprint `9H-HHC · Analytical Specimen`, label `Purified 9H-Hexahydrocannabinol`.
+  - `9h-hhcp`: `/medications/9h-hhcp.jpg`, imprint `9H-HHCP · Heptyl Homolog`, label `9H-Hexahydrocannabiphorol concentrate`.
+  - `cbg`: `/medications/cbg.jpg`, imprint `CBG · Pure Cannabigerol`, label `Cannabigerol isolate crystals / extract`.
+  - `cbn`: `/medications/cbn.jpg`, imprint `CBN · Pure Cannabinol`, label `Cannabinol distillate / crystalline formulation`.
+  - Verify and link the updated files for `alprazolam`, `clonazepam`, `ketamine`, `mdma`, and `oxycodone`.
+- Add 2D vector fallback molecular graphs for `dihydrocodeine` and `midazolam` in `renderSpecimenSvg()`.
+
+### D. Calculator & Cross-Tolerance Integration (`DosageCalculator.tsx` & `ClearanceCalculator.tsx`)
+- Support Dihydrocodeine and Midazolam in the substance selector dropdowns.
+- Add route-specific bioavailabilities (e.g. Midazolam oral ~36% vs sublingual/nasal ~55–75%).
+- Ensure the live multi-dose clearance simulator correctly superimposes their kinetic curves.
 
 ---
 
-### 4. Technical Architecture & Data Strategy
+## 3. Verification Plan
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                   App.tsx (Root Shell)                   │
-│  - Active Section State: 'clearance' | 'library' | 'dosage'│
-│  - Shared Selected Compound State                         │
-│  - Desktop 3-Zone Header & Mobile 3-Tab Bottom Bar       │
-└───────────────┬──────────────────────────┬───────────────┘
-                │                          │
-    ┌───────────┴──────────┐   ┌───────────┴──────────┐   ┌──────────────────────┐
-    │ ClearanceCalculator  │   │  CannabinoidLibrary  │   │   DosageCalculator   │
-    │  - Multi-Dose Log    │   │  - Compound Cards    │   │  - Allometric Dose   │
-    │  - 55kg/Sedentary PK │   │  - 9H/OH Switcher    │   │  - 0-10s Vape Slider │
-    │  - CannabinoidSelect │   │  - Quick Log/Dose CTA│   │  - CannabinoidSelect │
-    └──────────────────────┘   └───────────┬──────────┘   └──────────────────────┘
-                                           │
-                               ┌───────────┴──────────┐
-                               │ ChemicalStructure2D  │
-                               └──────────────────────┘
-```
+### Automated Tests & Compiles
+1. Run `compile_applet` to verify TypeScript builds with zero compilation errors.
+2. Run `lint_applet` to verify zero type mismatches or unresolved imports.
+3. Run `npm run build` to verify asset bundling into `dist/medications/`.
 
-- **Files to Clean Up / Delete**:
-  - `src/components/CompoundInspector.tsx` (superseded by `CannabinoidLibrary.tsx`)
-  - `src/components/ComparativeMatrix.tsx` (superseded by `CannabinoidLibrary.tsx`)
-  - `src/components/PotencyRadarChart.tsx` (superseded by `CannabinoidLibrary.tsx`)
-- **Files to Update**:
-  - `src/App.tsx`: Drop retired routes, legacy dock, and unused imports; streamline header and bottom tab bar to 3 tabs.
-  - `src/components/CannabinoidLibrary.tsx`: Remove `onOpenInspector` callback and SAR Inspector button from cards.
-- **Verification Plan**:
-  - Verify all unit tests continue to pass via `node --test src/utils/pharmacokinetics.test.ts`.
-  - Compile the application using `compile_applet`.
-  - Inspect iPhone 17 Pro viewport rendering (`402x874`) to verify 3-tab layout and layout integrity.
+### Interactive Visual Verification
+1. Open the applet in headless Chromium via `playwright-cli`.
+2. Inspect the **Library** tab under:
+   - "Opiates & Opioids" to confirm **Dihydrocodeine** card with user's photo and clinical details.
+   - "Benzodiazepines" to confirm **Midazolam** card with user's photo and clinical details.
+   - "9H- Series" and "Natural Weed" to confirm **9H-HHC**, **9H-HHCP**, **CBG**, and **CBN** real photos.
+3. Click into **Dosage Calculator** and select Dihydrocodeine and Midazolam to verify correct dose ranges and route adjustments.
+4. Click into **Clearance Tracker** to verify half-life simulation and multi-log superposition for the new compounds.

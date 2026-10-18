@@ -600,6 +600,24 @@ const BASE_RECREATIONAL_PROFILES: Record<string, RecreationalSubstanceProfile> =
       comedownFeel: 'Clean transition into sleep with minimal next-day buildup.',
     },
   },
+  midazolam: {
+    physicalFormLabel: 'Dormicum 7.5/15mg & Clear Ampoule',
+    physicalAppearance:
+      'Recognizable blue-grey oblong scored 7.5 mg or white 15 mg tablets (Dormicum), or clear sterile glass ampoules for clinical sedation (Versed).',
+    recreationalFeel:
+      'Known as the most rapidly intoxicating and amnesic pharmaceutical benzodiazepine. Hits with the suddenness of an elevator drop—within 10–15 minutes, an overwhelming wave of hypnotic sedation and physical heaviness washes over the body. All stress instantly dissolves into a dizzy, giggly carelessness, quickly followed by total anterograde amnesia where users can remain awake and talking yet remember absolutely nothing the next morning.',
+    subjectiveTags: [
+      'Rapid-Fire Hypnotic Sedation',
+      'Instant Emotional Silence & Carelessness',
+      'Heavy Motor Coordination Drop',
+      'Extreme "Time-Slip" Anterograde Amnesia',
+    ],
+    phases: {
+      onsetFeel: 'Sudden 10–15 minute wave of heaviness, wobbly feet, and dropping eyelids.',
+      peakFeel: 'Profound sedation, slurred speech, disinhibition, and rapid memory blackout.',
+      comedownFeel: 'Quick 2–3 hour clearance leaving minimal morning hangover compared to long-acting benzos.',
+    },
+  },
 
   // ======================== OPIOIDS & OPIATES ========================
   oxycodone: {
@@ -762,6 +780,24 @@ const BASE_RECREATIONAL_PROFILES: Record<string, RecreationalSubstanceProfile> =
       onsetFeel: '30–45 minute hepatic conversion into a warm, itchy body glow.',
       peakFeel: 'Mellow, dreamy euphoria and cozy couch-bound relaxation.',
       comedownFeel: 'Sleepy, relaxed 4-hour fade.',
+    },
+  },
+  dihydrocodeine: {
+    physicalFormLabel: 'White Paracodin Tablet & Oral Drops',
+    physicalAppearance:
+      'Small white scored tablets (30 mg or 60/90/120 mg DHC Contin extended-release) or clear viscous oral solution / drops (Paracodin).',
+    recreationalFeel:
+      'Offers a richer, warmer, and more reliably euphoric opioid experience than codeine. Users describe feeling wrapped in a soft, heated wool sweater: a cozy golden glow spreads through the stomach and limbs, aches and stress evaporate, and breathing slows into a blissful calm. Unlike codeine, it produces significantly less uncomfortable histamine itching while delivering a deeper, more comforting "nod" at higher doses.',
+    subjectiveTags: [
+      'Warm Heated-Sweater Euphoria',
+      'Deeper Body Melt than Codeine',
+      'Significantly Less Histamine Itch',
+      'Dreamy Calming Twilight Nods',
+    ],
+    phases: {
+      onsetFeel: '20–30 minute warm flush beginning in the abdomen and relaxing neck muscles.',
+      peakFeel: 'Deep euphoric contentment, peaceful waking dreams, and relaxed heavy limbs.',
+      comedownFeel: 'Gentle, soothing taper over 4–5 hours into restful sleep.',
     },
   },
   tramadol: {

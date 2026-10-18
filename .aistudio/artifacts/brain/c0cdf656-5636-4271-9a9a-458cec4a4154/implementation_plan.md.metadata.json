@@ -1,6 +1,6 @@
 {
-  "summary": "Implementation plan for removing superseded features replaced by the Cannabinoid Library and custom pickers, streamlining navigation to 3 core tabs (Clearance & Log, Cannabinoid Library, Dosage Guide), removing obsolete top ribbon docks and legacy inspectors, and cleaning up superseded components.",
-  "updatedAt": "2026-10-18T14:18:02.126933683Z",
+  "summary": "Comprehensive implementation plan to integrate the newly uploaded substance photographs (Dihydrocodeine, Midazolam, 9H-HHC, 9H-HHCP, CBG, CBN, Alprazolam, Clonazepam, Ketamine, MDMA, Oxycodone), build full pharmacological, clearance, and dosage profiles for Dihydrocodeine & Midazolam, and display real photos as the primary view across the library.",
+  "updatedAt": "2026-10-18T20:43:00.875338163Z",
   "requestFeedback": true,
   "userFacing": true
 }

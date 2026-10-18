@@ -372,7 +372,7 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
               aria-label="Search substances in library"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search weed, xanax, oxycodone, oxymorphone, tapentadol, pregabalin, ketamine, MDMA, 2C-B..."
+              placeholder="Search weed, xanax, rivotril, midazolam, dihydrocodeine, oxycodone, ketamine, MDMA..."
               className="w-full min-h-[44px] pl-10 pr-9 py-2 text-xs sm:text-sm bg-[#F2F2F7] border border-slate-200/90 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF] focus:bg-white transition-all"
             />
             {searchQuery && (
