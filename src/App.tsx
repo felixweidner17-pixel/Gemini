@@ -1,31 +1,27 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState } from 'react';
 import {
-  applyDerivativeModification,
+  CANNABINOID_DATABASE,
   DerivativeModType,
   getCannabinoidById,
 } from './data/cannabinoids';
-import { DosageCalculator } from './components/DosageCalculator';
-import { ClearanceCalculator } from './components/ClearanceCalculator';
+import { ALL_SUBSTANCES_DATABASE } from './data/allSubstances';
+import { HomeScreen } from './components/HomeScreen';
 import { CannabinoidLibrary } from './components/CannabinoidLibrary';
-import { Clock, Sliders, BookOpen } from 'lucide-react';
+import { DoseLogEntry } from './utils/pharmacokinetics';
+import { Home, BookOpen, Clock, Sparkles } from 'lucide-react';
 
-type ActiveSection = 'clearance' | 'library' | 'dosage';
+type ActiveSection = 'home' | 'library';
 
-export default function App() {
-  const [selectedId, setSelectedId] = useState<string>('9h-hhcp');
+export function App() {
+  const [activeSection, setActiveSection] = useState<ActiveSection>('home');
+  const [selectedId, setSelectedId] = useState<string>('delta9-thc');
   const [derivativeMod, setDerivativeMod] = useState<DerivativeModType>('native');
-  const [activeSection, setActiveSection] = useState<ActiveSection>('clearance');
 
-  const basePrimaryCompound = getCannabinoidById(selectedId);
-  const primaryCompound = applyDerivativeModification(
-    basePrimaryCompound,
-    derivativeMod
-  );
+  // Retrieve compound from database
+  const primaryCompound =
+    ALL_SUBSTANCES_DATABASE.find((c) => c.id === selectedId) ||
+    getCannabinoidById(selectedId) ||
+    CANNABINOID_DATABASE[0];
 
   const handleSelectQuickTry = (id: string) => {
     const modMatch = id.match(
@@ -38,16 +34,46 @@ export default function App() {
     }
   };
 
+  const handleLogFromLibrary = (baseId: string, mod: DerivativeModType) => {
+    const compound =
+      ALL_SUBSTANCES_DATABASE.find((c) => c.id === baseId) ||
+      getCannabinoidById(baseId) ||
+      CANNABINOID_DATABASE[0];
+    const defaultDose = Math.round(compound.baseOralThresholdMg * 1.5 * 10) / 10;
+    const entry: DoseLogEntry = {
+      id: `dose-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      cannabinoidId: baseId,
+      derivativeMod: mod,
+      route: 'oral',
+      doseMg: defaultDose,
+      timestampIso: new Date().toISOString(),
+      unitLabel: `${defaultDose} mg · oral`,
+    };
+    try {
+      const existing = localStorage.getItem('cannapharm_dose_log_entries_v2');
+      const parsed: DoseLogEntry[] = existing ? JSON.parse(existing) : [];
+      localStorage.setItem(
+        'cannapharm_dose_log_entries_v2',
+        JSON.stringify([entry, ...parsed])
+      );
+      window.dispatchEvent(new Event('storage'));
+    } catch {
+      // ignore
+    }
+    setActiveSection('home');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[#F2F2F7] text-slate-900 pb-24 md:pb-10">
-      {/* iOS 27 Translucent Top App Bar (Strict 3-Zone Contract, Compact 52px Height) */}
+      {/* iOS Translucent Top App Bar */}
       <header className="h-[52px] flex items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 bg-white/85 backdrop-blur-2xl border-b border-slate-200/70 sticky top-0 z-30">
         {/* Zone 1: Wordmark */}
         <a
           href="#top"
           onClick={(e) => {
             e.preventDefault();
-            setActiveSection('clearance');
+            setActiveSection('home');
           }}
           className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 flex items-center gap-1.5 sm:gap-2 min-w-0"
         >
@@ -64,9 +90,8 @@ export default function App() {
         >
           {(
             [
-              { id: 'clearance', label: 'Clearance' },
-              { id: 'library', label: 'Library' },
-              { id: 'dosage', label: 'Dosage' },
+              { id: 'home', label: 'Home · Clean Status' },
+              { id: 'library', label: 'Substance Library & Dosage' },
             ] as { id: ActiveSection; label: string }[]
           ).map((nav) => (
             <a
@@ -76,7 +101,7 @@ export default function App() {
                 e.preventDefault();
                 setActiveSection(nav.id);
               }}
-              className={`px-3.5 py-1.5 rounded-full transition-all whitespace-nowrap shrink-0 ${
+              className={`px-4 py-1.5 rounded-full transition-all whitespace-nowrap shrink-0 ${
                 activeSection === nav.id
                   ? 'bg-white text-slate-900 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -92,21 +117,19 @@ export default function App() {
           <button
             type="button"
             onClick={() =>
-              setActiveSection(
-                activeSection === 'library' ? 'clearance' : 'library'
-              )
+              setActiveSection(activeSection === 'library' ? 'home' : 'library')
             }
             className="min-h-[34px] px-3.5 py-1 text-xs font-semibold text-white bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] rounded-full transition-all whitespace-nowrap shrink-0 shadow-xs flex items-center gap-1.5"
           >
             {activeSection === 'library' ? (
               <>
-                <Clock className="w-3.5 h-3.5" />
-                <span>Clearance</span>
+                <Home className="w-3.5 h-3.5" />
+                <span>Home (Clean Status)</span>
               </>
             ) : (
               <>
                 <BookOpen className="w-3.5 h-3.5" />
-                <span>Library</span>
+                <span>Library (372 Substances)</span>
               </>
             )}
           </button>
@@ -118,13 +141,19 @@ export default function App() {
         id="top"
         className="flex-1 max-w-[1360px] w-full mx-auto px-3 sm:px-6 pt-3 sm:pt-5 space-y-4 sm:space-y-5 overflow-x-hidden"
       >
-        {/* Active Module Content */}
-        {activeSection === 'clearance' && (
-          <ClearanceCalculator
-            selectedCannabinoidId={primaryCompound.id}
-            onSelectCannabinoid={(id) => {
-              setDerivativeMod('native');
-              handleSelectQuickTry(id);
+        {activeSection === 'home' && (
+          <HomeScreen
+            onNavigateToLibrary={(substanceId) => {
+              if (substanceId) {
+                setSelectedId(substanceId);
+              }
+              setActiveSection('library');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onOpenDosageInLibrary={(substanceId) => {
+              setSelectedId(substanceId);
+              setActiveSection('library');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
           />
         )}
@@ -135,26 +164,12 @@ export default function App() {
             activeDerivativeMod={derivativeMod}
             onChangeDerivativeMod={setDerivativeMod}
             onLogCannabinoid={(baseId, mod) => {
-              setSelectedId(baseId);
-              setDerivativeMod(mod);
-              setActiveSection('clearance');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              handleLogFromLibrary(baseId, mod);
             }}
             onOpenDosage={(baseId, mod) => {
               setSelectedId(baseId);
               setDerivativeMod(mod);
-              setActiveSection('dosage');
               window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          />
-        )}
-
-        {activeSection === 'dosage' && (
-          <DosageCalculator
-            selectedCannabinoidId={primaryCompound.id}
-            onSelectCannabinoid={(id) => {
-              setDerivativeMod('native');
-              handleSelectQuickTry(id);
             }}
           />
         )}
@@ -164,36 +179,31 @@ export default function App() {
       <footer className="hidden md:block border-t border-slate-200/80 bg-white/70 backdrop-blur-md py-4 px-6 mt-8">
         <div className="max-w-[1360px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <div>
-            CannaPharm Analytical Workbench · Harm-Reduction Pharmacology & Toxicokinetic Reference
+            CannaPharm Toxicokinetic Workbench · Harm-Reduction Pharmacology & Elimination Reference
           </div>
           <div className="font-mono">
-            Ki & Pharmacokinetic Data: PubChem PUG REST · Citti et al. · Persson et al. · Huestis
+            372 Substances · Forensic Detection Windows & Elimination Half-Life Standards
           </div>
         </div>
       </footer>
 
-      {/* iOS 27 Translucent Bottom Tab Bar (3-Tab Thumb-Zone Ergonomics for iPhone 17 Pro) */}
+      {/* iOS Translucent Bottom Tab Bar (2-Tab Thumb-Zone Ergonomics) */}
       <nav
         aria-label="iOS Bottom Tab Bar"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-2xl border-t border-slate-200/80 pb-safe"
       >
-        <div className="grid grid-cols-3 items-center h-[58px] max-w-md mx-auto px-3">
+        <div className="grid grid-cols-2 items-center h-[58px] max-w-sm mx-auto px-3">
           {(
             [
               {
-                id: 'clearance',
-                label: 'Clearance',
-                icon: Clock,
+                id: 'home',
+                label: 'Clean Status',
+                icon: Home,
               },
               {
                 id: 'library',
-                label: 'Library',
+                label: 'Library & Dosage',
                 icon: BookOpen,
-              },
-              {
-                id: 'dosage',
-                label: 'Dosage',
-                icon: Sliders,
               },
             ] as const
           ).map((tab) => {
@@ -220,7 +230,7 @@ export default function App() {
                     isActive ? 'stroke-[2.4px]' : 'stroke-[1.8px]'
                   }`}
                 />
-                <span className="text-[10px] tracking-tight mt-0.5">
+                <span className="text-[10.5px] tracking-tight mt-0.5">
                   {tab.label}
                 </span>
               </button>
@@ -231,3 +241,5 @@ export default function App() {
     </div>
   );
 }
+
+export default App;

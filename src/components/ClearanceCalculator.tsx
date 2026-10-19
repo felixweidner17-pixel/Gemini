@@ -673,140 +673,6 @@ export const ClearanceCalculator: React.FC<ClearanceCalculatorProps> = ({
         )}
       </div>
 
-      {/* HERO APPLE HEALTH-STYLE CLEARANCE COUNTDOWN WIDGET (Always Visible at Top on iPhone 17 Pro!) */}
-      {mode === 'multi_log' && (
-        <div className="ios-card p-4 sm:p-6 space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <div className="text-[11px] font-mono text-slate-500 uppercase">
-                Live Superposition · {logEntries.length} Dose
-                {logEntries.length === 1 ? '' : 's'}
-              </div>
-              <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-                Countdown & Status
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => setLogEntries(createDefaultSampleEntries())}
-                className="min-h-[36px] px-3 py-1.5 text-xs font-semibold text-slate-700 bg-[#F2F2F7] hover:bg-slate-200/80 rounded-full transition-colors flex items-center gap-1 whitespace-nowrap shrink-0"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Sample Mix</span>
-              </button>
-              {logEntries.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setLogEntries([])}
-                  className="min-h-[36px] px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full transition-colors flex items-center gap-1 whitespace-nowrap shrink-0"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* 4-Tile Apple Health Metric Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
-            {/* Tile 1: 50 ng/mL Standard Urine Screen */}
-            <div
-              className={`p-3.5 sm:p-4 rounded-[20px] border ${
-                multiSim.isCurrentlyClear50
-                  ? 'bg-emerald-50/70 border-emerald-200'
-                  : 'bg-blue-50/60 border-blue-200'
-              }`}
-            >
-              <div className="text-[11px] uppercase font-mono font-bold text-slate-700 flex items-center gap-1">
-                {multiSim.isCurrentlyClear50 ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-3.5 h-3.5 text-[#007AFF] shrink-0" />
-                )}
-                <span>50 ng/mL Test</span>
-              </div>
-              <div className="mt-1.5 text-base sm:text-xl font-mono font-bold text-slate-900 tabular-nums leading-tight break-words">
-                {multiSim.isCurrentlyClear50
-                  ? 'Negative Now'
-                  : formatClearDate(multiSim.clearDate50Iso)}
-              </div>
-              <div className="text-xs font-mono text-slate-600 mt-1 break-words leading-tight">
-                {formatCountdownHours(multiSim.hoursFromNowToClear50)}
-              </div>
-            </div>
-
-            {/* Tile 2: 15 ng/mL Confirmatory GC-MS / LC-MS */}
-            <div
-              className={`p-3.5 sm:p-4 rounded-[20px] border ${
-                multiSim.isCurrentlyClear15
-                  ? 'bg-emerald-50/70 border-emerald-200'
-                  : 'bg-amber-50/60 border-amber-200'
-              }`}
-            >
-              <div className="text-[11px] uppercase font-mono font-bold text-slate-700">
-                15 ng/mL Lab
-              </div>
-              <div className="mt-1.5 text-base sm:text-xl font-mono font-bold text-slate-900 tabular-nums leading-tight break-words">
-                {multiSim.isCurrentlyClear15
-                  ? 'Negative Now'
-                  : formatClearDate(multiSim.clearDate15Iso)}
-              </div>
-              <div className="text-xs font-mono text-slate-600 mt-1 break-words leading-tight">
-                {formatCountdownHours(multiSim.hoursFromNowToClear15)}
-              </div>
-            </div>
-
-            {/* Tile 3: Current Urinary Load */}
-            <div className="p-3.5 sm:p-4 rounded-[20px] bg-[#F2F2F7] border border-slate-200/60">
-              <div className="text-[11px] uppercase font-mono font-semibold text-slate-500">
-                Current Level
-              </div>
-              <div className="mt-1.5 flex items-baseline">
-                <span className="text-xl sm:text-2xl font-mono font-bold text-slate-900 tabular-nums">
-                  {multiSim.currentImmunoassayNgMl}
-                </span>
-                <span className="text-xs font-mono text-slate-500 ml-1">
-                  ng/mL
-                </span>
-              </div>
-              <div className="text-[11px] font-mono text-slate-500 mt-1 break-words leading-tight">
-                Total LC-MS: {multiSim.currentTotalMetaboliteNgMl} ng/mL
-              </div>
-            </div>
-
-            {/* Tile 4: Limiting Bottleneck Compound */}
-            <div className="p-3.5 sm:p-4 rounded-[20px] bg-[#F2F2F7] border border-slate-200/60">
-              <div className="text-[11px] uppercase font-mono font-semibold text-slate-500">
-                Bottleneck
-              </div>
-              <div className="mt-1.5 text-base sm:text-lg font-mono font-bold text-slate-900 break-words leading-tight">
-                {multiSim.dominantCompoundShortName}
-              </div>
-              <div className="text-[11px] font-mono text-slate-600 mt-1 break-words leading-tight space-y-0.5">
-                <div>
-                  Blood:{' '}
-                  <span className="font-semibold text-slate-900">
-                    {multiSim.hoursFromNowToClearBlood <= 0
-                      ? 'Now'
-                      : `~${multiSim.hoursFromNowToClearBlood}h`}
-                  </span>
-                </div>
-                <div>
-                  Saliva:{' '}
-                  <span className="font-semibold text-slate-900">
-                    {multiSim.hoursFromNowToClearSaliva <= 0
-                      ? 'Now'
-                      : `~${multiSim.hoursFromNowToClearSaliva}h`}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
         {/* LEFT 5 COLUMNS: Dose Logger Form (or Single Controls) + Anthropometric Sliders */}
         <div className="lg:col-span-5 space-y-4 sm:space-y-5">
@@ -2149,7 +2015,7 @@ export const ClearanceCalculator: React.FC<ClearanceCalculatorProps> = ({
                 </h4>
                 {multiSim.entrySummaries.length === 0 ? (
                   <div className="p-6 text-center bg-[#F2F2F7] rounded-2xl text-xs text-slate-500">
-                    No cannabinoid doses currently logged. Use the logger form to add what you took, or tap &ldquo;Sample Mix&rdquo; above.
+                    No doses currently logged. Use the log form above to record a dose.
                   </div>
                 ) : (
                   <>
@@ -2330,96 +2196,145 @@ export const ClearanceCalculator: React.FC<ClearanceCalculatorProps> = ({
                 )}
               </div>
 
-              {/* 3. MULTI-MATRIX CLEARANCE SUMMARY (Urine, Blood, Saliva) */}
-              <div className="pt-3 border-t border-slate-200/70">
-                <h4 className="text-sm font-extrabold text-slate-900 mb-2.5">
-                  Detection Windows
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                  <div className="p-3.5 bg-[#F2F2F7] rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+              {/* UNIFIED DETECTION WINDOWS & COUNTDOWN STATUS */}
+              <div className="pt-4 border-t border-slate-200/80 space-y-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-mono font-semibold text-slate-500 uppercase">
+                      Real-Time Matrix Clearance & Detection Windows
+                    </div>
+                    <h4 className="text-base font-extrabold text-slate-900 mt-0.5">
+                      Detection Windows & Countdown Status
+                    </h4>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono bg-blue-50 text-[#007AFF] px-2.5 py-1 rounded-full font-bold">
+                      BMI {multiSim.bmi} · ~{multiSim.estimatedBodyFatPct}% Fat
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+                  {/* Urine 50 ng/mL Standard Screen */}
+                  <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-2xl flex flex-col justify-between space-y-2">
                     <div>
-                      <div className="font-bold text-slate-900 break-words">
-                        Urine (50 ng/mL)
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">Urine (50 ng/mL)</span>
+                        <span className="text-[10px] font-mono font-bold text-[#007AFF] bg-white px-2 py-0.5 rounded-full border border-blue-200">
+                          Standard Screen
+                        </span>
                       </div>
-                      <div className="text-slate-500 break-words">
-                        Standard screen
+                      <div className="text-[11px] text-slate-600 mt-0.5">
+                        Standard workplace & rapid cup screen
                       </div>
                     </div>
-                    <div className="text-left sm:text-right font-mono">
-                      <div className="font-bold text-slate-900 break-words">
-                        {multiSim.isCurrentlyClear50
-                          ? 'Negative Now'
-                          : formatClearDate(multiSim.clearDate50Iso)}
+                    <div className="pt-2 border-t border-blue-100 flex items-baseline justify-between font-mono">
+                      <div>
+                        <span className="text-xs text-slate-500 block">Status:</span>
+                        <span className="font-bold text-slate-900 text-sm">
+                          {multiSim.isCurrentlyClear50
+                            ? 'Negative Now'
+                            : formatClearDate(multiSim.clearDate50Iso)}
+                        </span>
                       </div>
-                      <div className="text-slate-500 break-words">
-                        {formatCountdownHours(multiSim.hoursFromNowToClear50)}
+                      <div className="text-right">
+                        <span className="text-xs font-extrabold text-[#007AFF]">
+                          {formatCountdownHours(multiSim.hoursFromNowToClear50)}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-3.5 bg-[#F2F2F7] rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  {/* Urine 15 ng/mL Confirmatory Lab */}
+                  <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl flex flex-col justify-between space-y-2">
                     <div>
-                      <div className="font-bold text-slate-900 break-words">
-                        Urine Lab (15 ng/mL)
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">Urine Lab (15 ng/mL)</span>
+                        <span className="text-[10px] font-mono font-bold text-amber-700 bg-white px-2 py-0.5 rounded-full border border-amber-200">
+                          GC-MS Confirm
+                        </span>
                       </div>
-                      <div className="text-slate-500 break-words">
-                        Confirmatory lab
+                      <div className="text-[11px] text-slate-600 mt-0.5">
+                        Confirmatory forensic & laboratory panel
                       </div>
                     </div>
-                    <div className="text-left sm:text-right font-mono">
-                      <div className="font-bold text-slate-900 break-words">
-                        {multiSim.isCurrentlyClear15
-                          ? 'Negative Now'
-                          : formatClearDate(multiSim.clearDate15Iso)}
+                    <div className="pt-2 border-t border-amber-100 flex items-baseline justify-between font-mono">
+                      <div>
+                        <span className="text-xs text-slate-500 block">Status:</span>
+                        <span className="font-bold text-slate-900 text-sm">
+                          {multiSim.isCurrentlyClear15
+                            ? 'Negative Now'
+                            : formatClearDate(multiSim.clearDate15Iso)}
+                        </span>
                       </div>
-                      <div className="text-slate-500 break-words">
-                        {formatCountdownHours(multiSim.hoursFromNowToClear15)}
+                      <div className="text-right">
+                        <span className="text-xs font-extrabold text-amber-700">
+                          {formatCountdownHours(multiSim.hoursFromNowToClear15)}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-3.5 bg-[#F2F2F7] rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  {/* Blood Active Panel */}
+                  <div className="p-3.5 bg-[#F2F2F7] rounded-2xl flex flex-col justify-between space-y-2">
                     <div>
-                      <div className="font-bold text-slate-900 break-words">
-                        Blood (2 ng/mL)
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">Blood (2 ng/mL)</span>
+                        <span className="text-[10px] font-mono text-slate-600 bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                          Active Panel
+                        </span>
                       </div>
-                      <div className="text-slate-500 break-words">
-                        Active blood panel
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Serum active concentration
                       </div>
                     </div>
-                    <div className="text-left sm:text-right font-mono">
-                      <div className="font-bold text-slate-900 break-words">
-                        {multiSim.hoursFromNowToClearBlood <= 0
-                          ? 'Negative Now'
-                          : formatClearDate(multiSim.clearDateBloodIso)}
+                    <div className="pt-2 border-t border-slate-200/70 flex items-baseline justify-between font-mono">
+                      <div>
+                        <span className="text-xs text-slate-500 block">Status:</span>
+                        <span className="font-bold text-slate-900 text-sm">
+                          {multiSim.hoursFromNowToClearBlood <= 0
+                            ? 'Negative Now'
+                            : formatClearDate(multiSim.clearDateBloodIso)}
+                        </span>
                       </div>
-                      <div className="text-slate-500 break-words">
-                        {formatCountdownHours(
-                          multiSim.hoursFromNowToClearBlood
-                        )}
+                      <div className="text-right">
+                        <span className="text-xs font-bold text-slate-700">
+                          {formatCountdownHours(
+                            multiSim.hoursFromNowToClearBlood
+                          )}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-3.5 bg-[#F2F2F7] rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  {/* Saliva Oral Fluid Panel */}
+                  <div className="p-3.5 bg-[#F2F2F7] rounded-2xl flex flex-col justify-between space-y-2">
                     <div>
-                      <div className="font-bold text-slate-900 break-words">
-                        Saliva (4 ng/mL)
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">Saliva (4 ng/mL)</span>
+                        <span className="text-[10px] font-mono text-slate-600 bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                          Oral Fluid
+                        </span>
                       </div>
-                      <div className="text-slate-500 break-words">
-                        Oral fluid test
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Oral fluid swab test
                       </div>
                     </div>
-                    <div className="text-left sm:text-right font-mono">
-                      <div className="font-bold text-slate-900 break-words">
-                        {multiSim.hoursFromNowToClearSaliva <= 0
-                          ? 'Negative Now'
-                          : formatClearDate(multiSim.clearDateSalivaIso)}
+                    <div className="pt-2 border-t border-slate-200/70 flex items-baseline justify-between font-mono">
+                      <div>
+                        <span className="text-xs text-slate-500 block">Status:</span>
+                        <span className="font-bold text-slate-900 text-sm">
+                          {multiSim.hoursFromNowToClearSaliva <= 0
+                            ? 'Negative Now'
+                            : formatClearDate(multiSim.clearDateSalivaIso)}
+                        </span>
                       </div>
-                      <div className="text-slate-500 break-words">
-                        {formatCountdownHours(
-                          multiSim.hoursFromNowToClearSaliva
-                        )}
+                      <div className="text-right">
+                        <span className="text-xs font-bold text-slate-700">
+                          {formatCountdownHours(
+                            multiSim.hoursFromNowToClearSaliva
+                          )}
+                        </span>
                       </div>
                     </div>
                   </div>

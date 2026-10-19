@@ -1,31 +1,37 @@
 import React, { useState } from 'react';
 import {
   applyDerivativeModification,
-  CANNABINOID_DATABASE,
   CannabinoidClass,
   CannabinoidProfile,
   DERIVATIVE_MOD_DESCRIPTIONS,
   DerivativeModType,
   getSubstanceMacroCategory,
   isCannabinoidSubstance,
-  MACRO_CATEGORY_GROUPS,
   SubstanceMacroCategory,
 } from '../data/cannabinoids';
+import {
+  ALL_SUBSTANCES_DATABASE,
+  MACRO_SUBCATEGORY_MAP,
+  SubcategoryPill,
+} from '../data/allSubstances';
 import { getRecreationalProfile } from '../data/recreationalProfiles';
 import { ChemicalStructure2D } from './ChemicalStructure2D';
 import { SubstancePhotoSpecimen } from './SubstancePhotoSpecimen';
-import { CustomOptionSelect } from './CannabinoidSelect';
+import { DosageCalculator } from './DosageCalculator';
 import { getPubChem2DImageUrl } from '../utils/pubchemClient';
 import {
   Search,
-  Sliders,
-  PlusCircle,
   BookOpen,
-  AlertTriangle,
   X,
   Eye,
   Sparkles,
   Camera,
+  Calculator,
+  Activity,
+  ShieldAlert,
+  Clock,
+  Layers,
+  FlaskConical,
 } from 'lucide-react';
 
 interface CannabinoidLibraryProps {
@@ -47,33 +53,21 @@ type PictureMode =
   | 'substance_photo'
   | 'pubchem_official';
 
-/* Recognizable High-Contrast Studio Picture of Each Substance + 2D Structure */
-const CannabinoidVisualPicture: React.FC<{
+type DetailTab = 'overview' | 'dosage' | 'pharmacology' | 'clearance' | 'risks';
+
+export const CannabinoidVisualPicture: React.FC<{
   compound: CannabinoidProfile;
   pictureMode: PictureMode;
 }> = ({ compound, pictureMode }) => {
   const [pubchemFailed, setPubchemFailed] = useState(false);
 
-  const cls = compound.classification;
-  const recProfile = getRecreationalProfile(compound);
-
-  // Palette and physical specimen backdrop per substance class
   const theme = (() => {
+    const cls = compound.classification;
     switch (cls) {
       case 'Phytocannabinoid':
         return {
-          bgGradient: 'from-emerald-950 via-teal-900 to-emerald-800',
-          cardSurface: 'bg-white/95 border-emerald-200/70',
-        };
-      case '9H- Enriched Series':
-        return {
-          bgGradient: 'from-slate-950 via-blue-950 to-indigo-900',
-          cardSurface: 'bg-white/95 border-blue-200/80',
-        };
-      case '9-OH / 10-OH / 11-OH Series':
-        return {
-          bgGradient: 'from-teal-950 via-cyan-900 to-slate-900',
-          cardSurface: 'bg-white/95 border-teal-200/80',
+          bgGradient: 'from-emerald-950 via-teal-900 to-slate-900',
+          cardSurface: 'bg-white/95 border-emerald-200/80',
         };
       case 'Semi-Synthetic':
         return {
@@ -81,6 +75,7 @@ const CannabinoidVisualPicture: React.FC<{
           cardSurface: 'bg-white/95 border-amber-200/80',
         };
       case 'Synthetic Agonist':
+      case 'Synthetic Cannabinoid':
         return {
           bgGradient: 'from-rose-950 via-slate-900 to-zinc-900',
           cardSurface: 'bg-white/95 border-rose-200/80',
@@ -120,18 +115,23 @@ const CannabinoidVisualPicture: React.FC<{
           bgGradient: 'from-violet-950 via-indigo-950 to-slate-900',
           cardSurface: 'bg-white/95 border-violet-200/80',
         };
+      default:
+        return {
+          bgGradient: 'from-slate-900 via-zinc-800 to-slate-950',
+          cardSurface: 'bg-white/95 border-slate-200/80',
+        };
     }
   })();
 
   if (pictureMode === 'pubchem_official' && !pubchemFailed) {
     return (
-      <div className="relative w-full h-52 bg-white flex items-center justify-center p-3 overflow-hidden border-b border-slate-200/80">
+      <div className="relative w-full h-44 bg-white flex items-center justify-center p-3 overflow-hidden border-b border-slate-200/80">
         <img
           src={getPubChem2DImageUrl(compound.pubchemCid)}
           alt={`Official NIH PubChem 2D chemical structure of ${compound.name}`}
           referrerPolicy="no-referrer"
           onError={() => setPubchemFailed(true)}
-          className="max-h-40 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+          className="max-h-36 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
         />
         <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between text-[10px] font-mono text-slate-500 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-200/70">
           <span>NIH PubChem CID {compound.pubchemCid}</span>
@@ -146,9 +146,9 @@ const CannabinoidVisualPicture: React.FC<{
   if (pictureMode === 'substance_photo') {
     return (
       <div
-        className={`relative w-full h-60 bg-gradient-to-br ${theme.bgGradient} overflow-hidden p-2.5 flex flex-col justify-between`}
+        className={`relative w-full h-44 bg-gradient-to-br ${theme.bgGradient} overflow-hidden p-2 flex flex-col justify-between`}
       >
-        <div className="w-full h-full overflow-hidden rounded-2xl border border-white/10 shadow-lg">
+        <div className="w-full h-full overflow-hidden rounded-xl border border-white/10 shadow-sm">
           <SubstancePhotoSpecimen
             compound={compound}
             className="w-full h-full"
@@ -160,12 +160,12 @@ const CannabinoidVisualPicture: React.FC<{
     );
   }
 
+  // Combined Specimen Photo + 2D Structure
   return (
     <div
-      className={`relative w-full h-52 bg-gradient-to-br ${theme.bgGradient} overflow-hidden p-2.5 sm:p-3 flex items-center justify-between gap-2`}
+      className={`relative w-full h-44 bg-gradient-to-br ${theme.bgGradient} overflow-hidden p-2 flex items-center justify-between gap-1.5`}
     >
-      {/* Left: Real High-Resolution Medication Picture */}
-      <div className="relative z-10 w-[49%] h-full rounded-2xl overflow-hidden border border-white/10 shadow-md">
+      <div className="relative z-10 w-[50%] h-full rounded-xl overflow-hidden border border-white/10 shadow-sm">
         <SubstancePhotoSpecimen
           compound={compound}
           className="w-full h-full"
@@ -174,30 +174,27 @@ const CannabinoidVisualPicture: React.FC<{
         />
       </div>
 
-      {/* Right: Interactive 2D Skeletal Chemical Structure Card */}
       <div
-        className={`relative z-10 w-[51%] h-full rounded-2xl border ${theme.cardSurface} backdrop-blur-md px-2.5 py-2 flex flex-col justify-between shadow-lg`}
+        className={`relative z-10 w-[50%] h-full rounded-xl border ${theme.cardSurface} backdrop-blur-md px-2 py-1.5 flex flex-col justify-between shadow-xs`}
       >
-        <div className="flex items-center justify-between gap-1.5">
-          <span className="text-[10px] font-mono font-bold text-slate-700 break-words leading-tight">
-            {compound.molecularFormula} · {compound.molecularWeight} g/mol
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-[9.5px] font-mono font-bold text-slate-700 truncate">
+            {compound.molecularFormula}
           </span>
-          <span className="text-[9px] font-mono font-bold text-[#007AFF] bg-blue-50 px-1.5 py-0.5 rounded whitespace-nowrap shrink-0">
-            2D SAR
+          <span className="text-[8.5px] font-mono font-bold text-[#007AFF] bg-blue-50 px-1 py-0.2 rounded shrink-0">
+            {compound.molecularWeight} g/mol
           </span>
         </div>
 
-        <div className="flex-1 flex items-center justify-center overflow-hidden">
-          <div className="w-full h-28 flex items-center justify-center">
+        <div className="w-full flex-1 flex items-center justify-center overflow-hidden py-0.5">
+          <div className="w-full h-full flex items-center justify-center scale-90 pointer-events-none">
             <ChemicalStructure2D compound={compound} />
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 text-[9.5px] font-mono text-slate-500 border-t border-slate-100 pt-1">
-          <span className="break-words leading-tight">
-            {compound.alkylChainLength}
-          </span>
-          <span className="font-bold text-slate-800 whitespace-nowrap shrink-0">
+        <div className="flex items-center justify-between text-[8.5px] font-mono text-slate-500 pt-0.5 border-t border-slate-100">
+          <span>CID {compound.pubchemCid}</span>
+          <span className="font-bold text-slate-800">
             XLogP {compound.xLogP}
           </span>
         </div>
@@ -211,43 +208,65 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
   activeDerivativeMod,
   onChangeDerivativeMod,
   onLogCannabinoid,
-  onOpenDosage,
 }) => {
+  const [activeView, setActiveView] = useState<'catalog' | 'dosage_workbench'>('catalog');
+  const [workbenchSubstanceId, setWorkbenchSubstanceId] = useState<string>(selectedCompoundId);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [macroFilter, setMacroFilter] = useState<
     'All' | SubstanceMacroCategory
   >('All');
-  const [categoryFilter, setCategoryFilter] = useState<
-    'All' | CannabinoidClass
-  >('All');
+  const [subFilterId, setSubFilterId] = useState<string>('All');
   const [sortBy, setSortBy] = useState<SortKey>('featured');
   const [pictureMode, setPictureMode] = useState<PictureMode>(
     'studio_and_structure'
   );
+
+  // Detail Modal State with Tabs
   const [detailCompound, setDetailCompound] = useState<{
     baseId: string;
     profile: CannabinoidProfile;
   } | null>(null);
+  const [detailTab, setDetailTab] = useState<DetailTab>('overview');
 
-  // Apply active derivative modifier (Native, 9H-, 9-OH-, 10-OH-, etc.) across cannabinoid library items
-  const libraryItems = CANNABINOID_DATABASE.map((base, idx) => ({
-    base,
-    effective: applyDerivativeModification(base, activeDerivativeMod),
-    index: idx,
-  }));
+  // Subcategories matching the active category
+  const availableSubcategories: SubcategoryPill[] =
+    macroFilter === 'All' ? [] : MACRO_SUBCATEGORY_MAP[macroFilter] || [];
+
+  // Transform base cannabinoids dynamically if activeDerivativeMod is selected
+  const libraryItems = ALL_SUBSTANCES_DATABASE.map((base, idx) => {
+    const isWeed = getSubstanceMacroCategory(base.classification) === 'Weed & Cannabinoids';
+    const effective = isWeed
+      ? applyDerivativeModification(base, activeDerivativeMod)
+      : base;
+    return {
+      base,
+      effective,
+      index: idx,
+    };
+  });
 
   const filteredAndSorted = libraryItems
     .filter(({ base, effective }) => {
       const macro = getSubstanceMacroCategory(base.classification);
       const matchesMacro = macroFilter === 'All' || macro === macroFilter;
-      const matchesCat =
-        categoryFilter === 'All' || base.classification === categoryFilter;
+
+      // Subcategory filter check
+      let matchesSub = true;
+      if (macroFilter !== 'All' && subFilterId !== 'All') {
+        const activeSub = availableSubcategories.find((s) => s.id === subFilterId);
+        if (activeSub) {
+          matchesSub = activeSub.matcher(effective);
+        }
+      }
+
       const q = searchQuery.trim().toLowerCase();
-      if (!q) return matchesMacro && matchesCat;
+      if (!q) return matchesMacro && matchesSub;
+
       const rec = getRecreationalProfile(effective);
       return (
         matchesMacro &&
-        matchesCat &&
+        matchesSub &&
         (effective.shortName.toLowerCase().includes(q) ||
           effective.name.toLowerCase().includes(q) ||
           base.shortName.toLowerCase().includes(q) ||
@@ -281,15 +300,6 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
       return a.effective.shortName.localeCompare(b.effective.shortName);
     });
 
-  const activeMacroGroup =
-    macroFilter === 'All'
-      ? null
-      : MACRO_CATEGORY_GROUPS.find((g) => g.id === macroFilter) || null;
-
-  const visibleSubcategories = activeMacroGroup
-    ? activeMacroGroup.subcategories
-    : MACRO_CATEGORY_GROUPS.flatMap((g) => g.subcategories);
-
   const getRiskPill = (tier: CannabinoidProfile['riskTier']) => {
     switch (tier) {
       case 'Low':
@@ -298,328 +308,355 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
         return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'High':
         return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'Very High':
+        return 'bg-rose-50 text-rose-700 border-rose-300 font-bold';
       case 'Extreme':
-        return 'bg-rose-50 text-rose-700 border-rose-200 font-bold';
+        return 'bg-red-100 text-red-800 border-red-300 font-extrabold animate-pulse';
     }
   };
 
+  const handleOpenDosageForSubstance = (id: string) => {
+    setWorkbenchSubstanceId(id);
+    setActiveView('dosage_workbench');
+    if (detailCompound) setDetailCompound(null);
+  };
+
   return (
-    <div className="space-y-4 sm:space-y-5">
-      {/* iOS 27 Library Hero & Filter Control Card */}
-      <section className="ios-card p-4 sm:p-6 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-200/70 pb-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-mono text-[#007AFF] font-semibold">
-              <BookOpen className="w-3.5 h-3.5 shrink-0" />
-              <span>
-                Encyclopedia · {CANNABINOID_DATABASE.length} Substances
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mt-0.5">
-              Substance Library
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-              Recognizable substance visuals, recreational feel & subjective effects, and clinical pharmacology.
-            </p>
+    <div className="space-y-6">
+      {/* Top Header & View Switcher (Catalog vs Dosage Workbench) */}
+      <section className="ios-card p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#007AFF] animate-ping" />
+            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-500">
+              Verified Pharmacopeia · {ALL_SUBSTANCES_DATABASE.length} Full Substance Profiles
+            </span>
           </div>
-
-          {/* Picture Mode Segmented Toggle */}
-          <div className="flex flex-wrap items-center gap-1 p-1 bg-[#E5E5EA]/85 rounded-2xl self-start lg:self-auto shrink-0">
-            <button
-              type="button"
-              onClick={() => setPictureMode('studio_and_structure')}
-              className={`min-h-[36px] px-3 py-1.5 text-xs rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
-                pictureMode === 'studio_and_structure'
-                  ? 'bg-white text-slate-900 font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 font-medium'
-              }`}
-            >
-              <Camera className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Real Photo + SAR</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPictureMode('substance_photo')}
-              className={`min-h-[36px] px-3 py-1.5 text-xs rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
-                pictureMode === 'substance_photo'
-                  ? 'bg-white text-slate-900 font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 font-medium'
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5 text-[#007AFF]" />
-              <span>Real Photo Focus</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPictureMode('pubchem_official')}
-              className={`min-h-[36px] px-3 py-1.5 text-xs rounded-xl transition-all whitespace-nowrap shrink-0 ${
-                pictureMode === 'pubchem_official'
-                  ? 'bg-white text-slate-900 font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 font-medium'
-              }`}
-            >
-              PubChem 2D
-            </button>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 mt-1">
+            Substance Library & Dosage Workbench
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-600 mt-1">
+            Clinical profiles, quadruple-checked threshold values, clearance kinetics, and dosage calculators.
+          </p>
         </div>
 
-        {/* Search + Custom Sort Dropdown Row */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-          <div className="md:col-span-8 relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              aria-label="Search substances in library"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search weed, xanax, rivotril, midazolam, dihydrocodeine, oxycodone, ketamine, MDMA..."
-              className="w-full min-h-[44px] pl-10 pr-9 py-2 text-xs sm:text-sm bg-[#F2F2F7] border border-slate-200/90 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF] focus:bg-white transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                aria-label="Clear library search"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <div className="md:col-span-4">
-            <CustomOptionSelect<SortKey>
-              id="library-sort-select"
-              value={sortBy}
-              onChange={setSortBy}
-              options={[
-                {
-                  value: 'featured',
-                  label: 'Featured',
-                  sublabel: 'Grouped by class & subcategory',
-                },
-                {
-                  value: 'potency_desc',
-                  label: 'Highest Potency',
-                  sublabel: 'Relative potency index',
-                },
-                {
-                  value: 'halflife_desc',
-                  label: 'Longest Half-Life',
-                  sublabel: 'Terminal elimination t½',
-                },
-                {
-                  value: 'logp_desc',
-                  label: 'Highest Lipophilicity',
-                  sublabel: 'XLogP3 adipose affinity',
-                },
-                {
-                  value: 'name_asc',
-                  label: 'Name (A → Z)',
-                  sublabel: 'Alphabetical by compound',
-                },
-              ]}
-            />
-          </div>
-        </div>
-
-        {/* Tier 1: Macro-Category Segmented Filter (Weed / Prescription Pharmaceuticals / Illicit Substances) */}
-        <div className="space-y-2">
-          <div className="text-[11px] font-mono font-semibold text-slate-500 uppercase">
-            Category
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 p-1.5 bg-[#E5E5EA]/85 rounded-2xl">
-            {(
-              [
-                {
-                  id: 'All',
-                  label: `All Substances (${CANNABINOID_DATABASE.length})`,
-                },
-                {
-                  id: 'Weed & Cannabinoids',
-                  label: `Weed & THC (${
-                    CANNABINOID_DATABASE.filter(
-                      (c) =>
-                        getSubstanceMacroCategory(c.classification) ===
-                        'Weed & Cannabinoids'
-                    ).length
-                  })`,
-                },
-                {
-                  id: 'Prescription Pharmaceuticals',
-                  label: `Prescription Pharma (${
-                    CANNABINOID_DATABASE.filter(
-                      (c) =>
-                        getSubstanceMacroCategory(c.classification) ===
-                        'Prescription Pharmaceuticals'
-                    ).length
-                  })`,
-                },
-                {
-                  id: 'Illicit Substances',
-                  label: `Illicit Substances (${
-                    CANNABINOID_DATABASE.filter(
-                      (c) =>
-                        getSubstanceMacroCategory(c.classification) ===
-                        'Illicit Substances'
-                    ).length
-                  })`,
-                },
-              ] as const
-            ).map((macro) => (
-              <button
-                key={macro.id}
-                type="button"
-                onClick={() => {
-                  setMacroFilter(macro.id);
-                  setCategoryFilter('All');
-                }}
-                className={`min-h-[38px] px-3 py-1.5 text-xs rounded-xl transition-all text-center break-words leading-tight ${
-                  macroFilter === macro.id
-                    ? 'bg-white text-slate-900 font-extrabold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 font-semibold'
-                }`}
-              >
-                {macro.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tier 2: Subcategory Filter Pills */}
-        <div className="space-y-1.5">
-          <div className="text-[11px] font-mono font-semibold text-slate-500 uppercase">
-            Subcategory
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 py-0.5">
-            <button
-              type="button"
-              onClick={() => setCategoryFilter('All')}
-              className={`min-h-[34px] px-3 py-1.5 text-xs font-semibold rounded-full transition-all break-words leading-tight ${
-                categoryFilter === 'All'
-                  ? 'bg-[#007AFF] text-white shadow-xs'
-                  : 'bg-[#F2F2F7] text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              All {activeMacroGroup ? activeMacroGroup.shortLabel : 'Subcategories'}
-            </button>
-            {visibleSubcategories.map((sub) => {
-              const count = CANNABINOID_DATABASE.filter(
-                (c) => c.classification === sub.id
-              ).length;
-              return (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={() => setCategoryFilter(sub.id)}
-                  className={`min-h-[34px] px-3 py-1.5 text-xs font-semibold rounded-full transition-all break-words leading-tight ${
-                    categoryFilter === sub.id
-                      ? 'bg-[#007AFF] text-white shadow-xs'
-                      : 'bg-[#F2F2F7] text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {sub.label} ({count})
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Universal 9H / 9-OH / 10-OH Structural Variant Bar (Applies to Weed & Cannabinoids) */}
-        <div className="pt-2.5 border-t border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          {macroFilter === 'All' || macroFilter === 'Weed & Cannabinoids' ? (
-            <div className="flex flex-wrap items-center gap-1.5 py-0.5">
-              <span className="text-[11px] font-mono font-semibold text-slate-500 mr-1 break-words">
-                Cannabinoid Variant:
-              </span>
-              {DERIVATIVE_MOD_DESCRIPTIONS.map((mod) => {
-                const active = activeDerivativeMod === mod.id;
-                return (
-                  <button
-                    key={mod.id}
-                    type="button"
-                    onClick={() => onChangeDerivativeMod(mod.id)}
-                    className={`min-h-[34px] px-3 py-1 text-xs font-mono rounded-full transition-all break-words border ${
-                      active
-                        ? 'bg-[#0D9488] text-white border-[#0D9488] font-bold shadow-xs'
-                        : 'bg-[#F2F2F7] text-slate-700 border-transparent hover:bg-teal-50'
-                    }`}
-                  >
-                    {mod.shortTag}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-[11px] font-mono text-slate-500">
-              Showing {activeMacroGroup?.label} · Select any compound to log clearance or calculate dosage.
-            </div>
-          )}
-          <span className="text-[11px] font-mono text-slate-500 shrink-0">
-            Showing {filteredAndSorted.length} substances
-          </span>
+        {/* View Toggle Pill */}
+        <div className="flex items-center gap-1.5 p-1 bg-[#E5E5EA]/85 rounded-full shrink-0 self-start md:self-auto">
+          <button
+            type="button"
+            onClick={() => setActiveView('catalog')}
+            className={`min-h-[36px] px-4 py-1.5 text-xs rounded-full font-bold transition-all flex items-center gap-1.5 ${
+              activeView === 'catalog'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Catalog ({filteredAndSorted.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('dosage_workbench')}
+            className={`min-h-[36px] px-4 py-1.5 text-xs rounded-full font-bold transition-all flex items-center gap-1.5 ${
+              activeView === 'dosage_workbench'
+                ? 'bg-[#007AFF] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Calculator className="w-3.5 h-3.5" />
+            <span>Dosage Workbench</span>
+          </button>
         </div>
       </section>
 
-      {/* Library Visual Card Grid */}
-      {filteredAndSorted.length === 0 ? (
-        <div className="ios-card p-10 text-center space-y-2">
-          <div className="text-base font-bold text-slate-800">
-            No substances match &ldquo;{searchQuery}&rdquo;
+      {/* VIEW A: INTEGRATED DOSAGE WORKBENCH */}
+      {activeView === 'dosage_workbench' && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between bg-blue-50/80 border border-blue-200/80 px-4 py-2.5 rounded-2xl">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+              <Calculator className="w-4 h-4 text-[#007AFF]" />
+              <span>Interactive Dosage Workbench Active</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveView('catalog')}
+              className="text-xs font-bold text-[#007AFF] hover:underline"
+            >
+              ← Back to Substance Catalog
+            </button>
           </div>
-          <p className="text-xs text-slate-500">
-            Try clearing your search filter or switching the category pill above.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchQuery('');
-              setMacroFilter('All');
-              setCategoryFilter('All');
-            }}
-            className="mt-2 min-h-[38px] px-4 py-1.5 text-xs font-bold text-white bg-[#007AFF] rounded-full"
-          >
-            Reset Filters
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-          {filteredAndSorted.map(({ base, effective }) => {
-            const isCurrentlySelected =
-              base.id === selectedCompoundId ||
-              effective.id === selectedCompoundId;
-            const isCannabinoid = isCannabinoidSubstance(effective);
-            const recProfile = getRecreationalProfile(effective);
+          <DosageCalculator
+            selectedCannabinoidId={workbenchSubstanceId}
+            onSelectCannabinoid={(id) => setWorkbenchSubstanceId(id)}
+          />
+        </section>
+      )}
 
-            return (
-              <article
-                key={effective.id}
-                className={`ios-card overflow-hidden flex flex-col justify-between transition-all group ${
-                  isCurrentlySelected
-                    ? 'ring-2 ring-[#007AFF]'
-                    : 'hover:shadow-md'
-                }`}
+      {/* VIEW B: COMPACT SUBSTANCE CATALOG */}
+      {activeView === 'catalog' && (
+        <>
+          {/* Controls Panel: Search, Category, Subcategories & Cannabinoid Variant Dropdown */}
+          <section className="ios-card p-4 sm:p-5 space-y-4">
+            <div className="flex flex-col lg:flex-row gap-3">
+              {/* Search Bar */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, synonym, or classification..."
+                  className="w-full min-h-[42px] pl-10 pr-9 py-2 bg-[#F2F2F7] rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#007AFF]"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Picture Mode Switcher */}
+              <div className="flex items-center gap-1 p-1 bg-[#E5E5EA]/85 rounded-xl shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setPictureMode('studio_and_structure')}
+                  className={`min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                    pictureMode === 'studio_and_structure'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Photo + 2D
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPictureMode('substance_photo')}
+                  className={`min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 ${
+                    pictureMode === 'substance_photo'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Camera className="w-3 h-3 text-[#007AFF]" />
+                  <span>Photo Only</span>
+                </button>
+              </div>
+
+              {/* Sort By Dropdown */}
+              <div className="shrink-0 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-600 shrink-0">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortKey)}
+                  className="min-h-[38px] px-3 py-1.5 bg-[#F2F2F7] rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#007AFF]"
+                >
+                  <option value="featured">Featured Order</option>
+                  <option value="name_asc">Name (A-Z)</option>
+                  <option value="potency_desc">Highest Potency</option>
+                  <option value="halflife_desc">Longest Half-Life</option>
+                  <option value="logp_desc">Lipophilicity (XLogP)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Category Filter Pills: All / Weed / Rx Pharma / Illicit */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-mono font-semibold text-slate-500 uppercase">
+                Category
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 bg-[#E5E5EA]/85 rounded-2xl">
+                {(
+                  [
+                    {
+                      id: 'All',
+                      label: `All Substances (${ALL_SUBSTANCES_DATABASE.length})`,
+                    },
+                    {
+                      id: 'Weed & Cannabinoids',
+                      label: `Weed & Cannabinoids (${
+                        ALL_SUBSTANCES_DATABASE.filter(
+                          (c) =>
+                            getSubstanceMacroCategory(c.classification) ===
+                            'Weed & Cannabinoids'
+                        ).length
+                      })`,
+                    },
+                    {
+                      id: 'Prescription Pharmaceuticals',
+                      label: `Prescription Pharma (${
+                        ALL_SUBSTANCES_DATABASE.filter(
+                          (c) =>
+                            getSubstanceMacroCategory(c.classification) ===
+                            'Prescription Pharmaceuticals'
+                        ).length
+                      })`,
+                    },
+                    {
+                      id: 'Illicit Substances',
+                      label: `Illicit Substances (${
+                        ALL_SUBSTANCES_DATABASE.filter(
+                          (c) =>
+                            getSubstanceMacroCategory(c.classification) ===
+                            'Illicit Substances'
+                        ).length
+                      })`,
+                    },
+                  ] as const
+                ).map((macro) => (
+                  <button
+                    key={macro.id}
+                    type="button"
+                    onClick={() => {
+                      setMacroFilter(macro.id);
+                      setSubFilterId('All');
+                    }}
+                    className={`min-h-[38px] px-3 py-1.5 text-xs rounded-xl transition-all text-center font-bold ${
+                      macroFilter === macro.id
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {macro.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Subcategory Pills: ONLY display subcategories matching the selected category! */}
+            {macroFilter !== 'All' && availableSubcategories.length > 0 && (
+              <div className="space-y-1.5 pt-1 border-t border-slate-200/70">
+                <div className="text-[11px] font-mono font-semibold text-slate-500 uppercase">
+                  {macroFilter} Subcategories
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSubFilterId('All')}
+                    className={`min-h-[32px] px-3 py-1 text-xs font-bold rounded-full transition-all ${
+                      subFilterId === 'All'
+                        ? 'bg-[#007AFF] text-white shadow-2xs'
+                        : 'bg-[#F2F2F7] text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    All {macroFilter.split('&')[0].trim()}
+                  </button>
+                  {availableSubcategories.map((sub) => {
+                    const count = ALL_SUBSTANCES_DATABASE.filter((c) => {
+                      const matchMacro = getSubstanceMacroCategory(c.classification) === macroFilter;
+                      return matchMacro && sub.matcher(c);
+                    }).length;
+                    return (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setSubFilterId(sub.id)}
+                        className={`min-h-[32px] px-3 py-1 text-xs font-bold rounded-full transition-all ${
+                          subFilterId === sub.id
+                            ? 'bg-[#007AFF] text-white shadow-2xs'
+                            : 'bg-[#F2F2F7] text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {sub.label} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Cannabinoid Variants Dropdown: ONLY displayed if user selects the Weed category! */}
+            {macroFilter === 'Weed & Cannabinoids' && (
+              <div className="pt-2.5 border-t border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-50/50 p-3 rounded-2xl border border-emerald-200/60">
+                <div className="flex items-center gap-2">
+                  <FlaskConical className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <div>
+                    <div className="text-xs font-bold text-emerald-950">
+                      Cannabinoid Variant (Dynamic Transformation)
+                    </div>
+                    <div className="text-[11px] text-emerald-700">
+                      Active variant dynamically modulates potency, half-life, and onset across all weed cards.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="shrink-0 flex items-center gap-2">
+                  <label
+                    htmlFor="cannabinoid-variant-select"
+                    className="text-xs font-bold text-slate-700"
+                  >
+                    Variant:
+                  </label>
+                  <select
+                    id="cannabinoid-variant-select"
+                    value={activeDerivativeMod}
+                    onChange={(e) =>
+                      onChangeDerivativeMod(e.target.value as DerivativeModType)
+                    }
+                    className="min-h-[38px] px-3 py-1.5 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                  >
+                    {DERIVATIVE_MOD_DESCRIPTIONS.map((mod) => (
+                      <option key={mod.id} value={mod.id}>
+                        {mod.label} ({mod.shortTag})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Compact Substance Cards Grid:
+              ONLY displays Photo, Name, Classification, Risk badge, and Potency.
+              Pressing Details is REQUIRED to view clinical summary, recreational feel, urine test, hold, ki, half-life! */}
+          {filteredAndSorted.length === 0 ? (
+            <div className="ios-card p-10 text-center space-y-2">
+              <div className="text-base font-bold text-slate-800">
+                No substances match &ldquo;{searchQuery}&rdquo;
+              </div>
+              <p className="text-xs text-slate-500">
+                Try clearing your search filter or resetting categories.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setMacroFilter('All');
+                  setSubFilterId('All');
+                }}
+                className="mt-2 min-h-[38px] px-4 py-1.5 text-xs font-bold text-white bg-[#007AFF] rounded-full"
               >
-                <div>
-                  {/* Card Picture & Molecular Header */}
-                  <CannabinoidVisualPicture
-                    compound={effective}
-                    pictureMode={pictureMode}
-                  />
+                Reset Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredAndSorted.map(({ base, effective }) => {
+                const isCannabinoid = isCannabinoidSubstance(effective);
 
-                  {/* Card Body: Title, Physical Appearance, Recreational Feel & Pharmacology */}
-                  <div className="p-4 sm:p-5 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[11px] font-mono font-bold text-[#007AFF] break-words">
+                return (
+                  <article
+                    key={effective.id}
+                    className="ios-card overflow-hidden flex flex-col justify-between transition-all hover:shadow-md group border border-slate-200/80 bg-white"
+                  >
+                    <div>
+                      {/* Compact Photo & Structure Specimen Header */}
+                      <CannabinoidVisualPicture
+                        compound={effective}
+                        pictureMode={pictureMode}
+                      />
+
+                      {/* Compact Card Body: Strictly Name, Classification, Risk Badge, and Potency ONLY */}
+                      <div className="p-3.5 space-y-2.5">
+                        <div className="flex items-start justify-between gap-1.5">
+                          <span className="text-[11px] font-mono font-bold text-[#007AFF] truncate">
                             {effective.classification}
                           </span>
-                          <span aria-hidden="true" className="text-slate-300">
-                            ·
-                          </span>
                           <span
-                            className={`text-[10px] font-mono px-2 py-0.5 rounded-full border break-words ${getRiskPill(
+                            className={`text-[9.5px] font-mono px-2 py-0.5 rounded-full border shrink-0 ${getRiskPill(
                               effective.riskTier
                             )}`}
                           >
@@ -627,369 +664,483 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                           </span>
                         </div>
 
-                        <h2 className="text-lg font-extrabold text-slate-900 mt-1 leading-snug break-words">
-                          {effective.shortName}{' '}
-                          <span className="text-xs font-normal text-slate-500 block">
-                            ({effective.name})
-                          </span>
-                        </h2>
-                      </div>
-
-                      <div className="text-right shrink-0 bg-blue-50/80 border border-blue-200/70 px-2.5 py-1 rounded-xl">
-                        <div className="text-sm font-mono font-extrabold text-[#007AFF] tabular-nums whitespace-nowrap">
-                          {isCannabinoid
-                            ? `${effective.relativePotencyVsD9}×`
-                            : `${effective.baseOralThresholdMg} mg`}
-                        </div>
-                        <div className="text-[9px] font-mono text-slate-500 uppercase whitespace-nowrap">
-                          {isCannabinoid ? 'vs Δ9-THC' : 'Threshold'}
+                        <div>
+                          <h2 className="text-base font-extrabold text-slate-900 leading-snug line-clamp-1">
+                            {effective.shortName}
+                          </h2>
+                          <p className="text-xs text-slate-500 truncate mt-0.5">
+                            {effective.name}
+                          </p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Synonyms & Physical Form */}
-                    <div className="text-[11px] text-slate-500 font-mono break-words leading-snug space-y-0.5">
-                      <div>
-                        Also known as: {effective.synonyms.slice(0, 3).join(' · ')}
-                      </div>
-                      <div className="text-slate-600">
-                        <strong className="text-slate-800">Appearance:</strong>{' '}
-                        {recProfile.physicalAppearance}
-                      </div>
+                    {/* Action Buttons: Details (opens modal) & Dosage (opens workbench) */}
+                    <div className="p-3 pt-1 border-t border-slate-100 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailCompound({
+                            baseId: base.id,
+                            profile: effective,
+                          });
+                          setDetailTab('overview');
+                        }}
+                        className="min-h-[38px] px-3 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Details</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDosageForSubstance(effective.id)}
+                        className="min-h-[38px] px-3 py-1.5 bg-[#F2F2F7] hover:bg-[#E5E5EA] active:scale-[0.98] text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1"
+                      >
+                        <Calculator className="w-3.5 h-3.5 text-[#007AFF]" />
+                        <span>Dosage</span>
+                      </button>
                     </div>
-
-                    {/* Highlighted Recreational & Subjective Feel Section */}
-                    <div className="p-3.5 bg-blue-50/55 border border-blue-200/75 rounded-2xl space-y-2">
-                      <div className="flex items-center justify-between gap-1.5">
-                        <span className="text-[11px] font-mono font-extrabold uppercase text-[#007AFF] flex items-center gap-1">
-                          <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                          <span>How It Feels Recreationally</span>
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-800 leading-relaxed break-words">
-                        {recProfile.recreationalFeel}
-                      </p>
-                      <div className="pt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] font-mono text-slate-600 border-t border-blue-200/60">
-                        {recProfile.subjectiveTags.map((tag, idx) => (
-                          <React.Fragment key={tag}>
-                            {idx > 0 && (
-                              <span aria-hidden="true" className="text-slate-300">
-                                ·
-                              </span>
-                            )}
-                            <span className="font-semibold text-slate-700 break-words">
-                              {tag}
-                            </span>
-                          </React.Fragment>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Clinical Summary & Pharmacology */}
-                    <div className="p-3 bg-[#F2F2F7] rounded-2xl space-y-1.5">
-                      <p className="text-[11px] text-slate-700 leading-relaxed break-words">
-                        <strong className="text-slate-900">Clinical Summary:</strong>{' '}
-                        {effective.summary}
-                      </p>
-                      <p className="text-[11px] text-slate-600 leading-relaxed break-words">
-                        <strong className="text-slate-800">Pharmacology:</strong>{' '}
-                        {effective.pharmacologyNotes}
-                      </p>
-                    </div>
-
-                    {/* 4-Metric Quick Bio-Grid */}
-                    <div className="grid grid-cols-4 gap-1.5 pt-1 text-center">
-                      <div className="p-2 bg-[#F2F2F7]/80 rounded-xl flex flex-col justify-center">
-                        <div className="text-[9px] font-mono text-slate-500 uppercase leading-tight break-words">
-                          {isCannabinoid ? 'CB1 Ki' : 'Target Ki'}
-                        </div>
-                        <div className="text-xs font-mono font-bold text-slate-900 tabular-nums mt-0.5 break-words leading-tight">
-                          {effective.cb1KiNm} nM
-                        </div>
-                      </div>
-                      <div className="p-2 bg-[#F2F2F7]/80 rounded-xl flex flex-col justify-center">
-                        <div className="text-[9px] font-mono text-slate-500 uppercase leading-tight break-words">
-                          Half-Life
-                        </div>
-                        <div className="text-xs font-mono font-bold text-slate-900 tabular-nums mt-0.5 break-words leading-tight">
-                          ~{effective.terminalHalfLifeHours}h
-                        </div>
-                      </div>
-                      <div className="p-2 bg-[#F2F2F7]/80 rounded-xl flex flex-col justify-center">
-                        <div className="text-[9px] font-mono text-slate-500 uppercase leading-tight break-words">
-                          {isCannabinoid ? 'Vape Hold' : 'Oral Hold'}
-                        </div>
-                        <div className="text-xs font-mono font-bold text-slate-900 tabular-nums mt-0.5 break-words leading-tight">
-                          {isCannabinoid
-                            ? `${effective.inhaledDurationHours[0]}–${effective.inhaledDurationHours[1]}h`
-                            : `${effective.oralDurationHours[0]}–${effective.oralDurationHours[1]}h`}
-                        </div>
-                      </div>
-                      <div className="p-2 bg-[#F2F2F7]/80 rounded-xl flex flex-col justify-center">
-                        <div className="text-[9px] font-mono text-slate-500 uppercase leading-tight break-words">
-                          Urine Test
-                        </div>
-                        <div className="text-xs font-mono font-bold text-slate-900 tabular-nums mt-0.5 break-words leading-tight">
-                          {effective.immunoassayCrossReactivityPct}%
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action Footer Buttons (44px+ iPhone 17 Pro Touch Ergonomics) */}
-                <div className="px-4 pb-4 pt-2 border-t border-slate-100 grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onLogCannabinoid(base.id, activeDerivativeMod)
-                    }
-                    className="min-h-[42px] px-2 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 text-center break-words leading-tight shadow-2xs"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Log</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onOpenDosage(base.id, activeDerivativeMod)}
-                    className="min-h-[42px] px-2 py-1.5 bg-[#F2F2F7] hover:bg-slate-200/80 text-slate-800 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1 text-center break-words leading-tight"
-                  >
-                    <Sliders className="w-3.5 h-3.5 shrink-0 text-slate-600" />
-                    <span>Dose</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDetailCompound({ baseId: base.id, profile: effective })
-                    }
-                    className="min-h-[42px] px-2 py-1.5 bg-[#F2F2F7] hover:bg-slate-200/80 text-slate-800 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1 text-center break-words leading-tight"
-                  >
-                    <Eye className="w-3.5 h-3.5 shrink-0 text-[#007AFF]" />
-                    <span>Details</span>
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
-      {/* iOS 27 Full Substance Illustrated Modal / Bottom Sheet */}
+      {/* FULL-SCREEN ORGANIZED MODAL FOR FULL DETAILS
+          Crucial User Request: Pictures MUST scroll with the details page (not fixed in the middle of screen) */}
       {detailCompound &&
         (() => {
-          const modalRec = getRecreationalProfile(detailCompound.profile);
+          const profile = detailCompound.profile;
+          const modalRec = getRecreationalProfile(profile);
+          const isCannabinoid = isCannabinoidSubstance(profile);
+
           return (
             <div
-              className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+              className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto"
               onClick={() => setDetailCompound(null)}
             >
               <div
                 role="dialog"
                 aria-modal="true"
-                aria-label={`${detailCompound.profile.name} Full Guide`}
+                aria-label={`${profile.name} Full Profile`}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-2xl max-h-[88vh] bg-white rounded-t-[28px] sm:rounded-[28px] shadow-2xl overflow-hidden flex flex-col"
+                className="w-full max-w-4xl max-h-[92vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden my-auto"
               >
-                {/* Visual Header */}
-                <div className="relative shrink-0">
-                  <CannabinoidVisualPicture
-                    compound={detailCompound.profile}
-                    pictureMode="studio_and_structure"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Close substance guide"
-                    onClick={() => setDetailCompound(null)}
-                    className="absolute top-3 right-3 z-20 w-9 h-9 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-md"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Scrollable Illustrated Dossier Content */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+                {/* Modal Fixed Top Bar (Title & Close Button) */}
+                <div className="p-4 sm:p-5 border-b border-slate-200/80 flex items-center justify-between gap-3 shrink-0 bg-white">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-mono font-bold text-[#007AFF]">
-                        {detailCompound.profile.classification} · CID{' '}
-                        {detailCompound.profile.pubchemCid}
+                        {profile.classification}
                       </span>
-                      <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-0.5 break-words">
-                        {detailCompound.profile.name} (
-                        {detailCompound.profile.shortName})
-                      </h2>
-                      <p className="text-xs text-slate-500 font-mono mt-0.5 break-words">
-                        Synonyms: {detailCompound.profile.synonyms.join(' · ')}
-                      </p>
-                      <p className="text-xs text-slate-600 mt-1 break-words">
-                        <strong className="text-slate-900">
-                          Physical Appearance:
-                        </strong>{' '}
-                        {modalRec.physicalAppearance}
-                      </p>
+                      <span className="text-slate-300">·</span>
+                      <span
+                        className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border ${getRiskPill(
+                          profile.riskTier
+                        )}`}
+                      >
+                        {profile.riskTier} Risk
+                      </span>
                     </div>
-
-                    <span
-                      className={`text-xs font-mono px-3 py-1 rounded-full border shrink-0 ${getRiskPill(
-                        detailCompound.profile.riskTier
-                      )}`}
-                    >
-                      {detailCompound.profile.riskTier} Risk
-                    </span>
+                    <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-0.5 truncate">
+                      {profile.shortName}{' '}
+                      <span className="text-sm font-normal text-slate-500">
+                        ({profile.name})
+                      </span>
+                    </h2>
                   </div>
 
-                  {/* Recreational & Subjective Experience Card */}
-                  <div className="p-4 bg-blue-50/60 border border-blue-200/80 rounded-2xl space-y-2.5">
-                    <div className="text-xs font-mono font-extrabold uppercase text-[#007AFF] flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 shrink-0" />
-                      <span>How It Feels Recreationally (Subjective Effects)</span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-slate-800 leading-relaxed break-words">
-                      {modalRec.recreationalFeel}
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                      <div className="p-2.5 bg-white/90 rounded-xl border border-blue-100">
-                        <div className="text-[10px] font-mono font-bold uppercase text-slate-500">
-                          Onset Feel
-                        </div>
-                        <p className="text-[11px] text-slate-700 mt-0.5 leading-snug break-words">
-                          {modalRec.phases.onsetFeel}
-                        </p>
-                      </div>
-                      <div className="p-2.5 bg-white/90 rounded-xl border border-blue-100">
-                        <div className="text-[10px] font-mono font-bold uppercase text-[#007AFF]">
-                          Peak Experience
-                        </div>
-                        <p className="text-[11px] text-slate-700 mt-0.5 leading-snug break-words">
-                          {modalRec.phases.peakFeel}
-                        </p>
-                      </div>
-                      <div className="p-2.5 bg-white/90 rounded-xl border border-blue-100">
-                        <div className="text-[10px] font-mono font-bold uppercase text-slate-500">
-                          Comedown / Afterglow
-                        </div>
-                        <p className="text-[11px] text-slate-700 mt-0.5 leading-snug break-words">
-                          {modalRec.phases.comedownFeel}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Overview & Pharmacology */}
-                  <div className="space-y-2.5 text-xs sm:text-sm text-slate-700 leading-relaxed">
-                    <p>{detailCompound.profile.summary}</p>
-                    <div className="p-3.5 bg-[#F2F2F7] rounded-2xl space-y-1">
-                      <div className="text-xs font-extrabold text-slate-900">
-                        Metabolism & Kinetics
-                      </div>
-                      <p className="text-xs text-slate-600 leading-relaxed">
-                        {detailCompound.profile.pharmacologyNotes}
-                      </p>
-                      <div className="text-[11px] font-mono text-slate-500 pt-1">
-                        Enzymes: {detailCompound.profile.cypEnzymes.join(', ')} ·
-                        Primary Metabolite:{' '}
-                        {detailCompound.profile.primaryMetabolite}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Official PubChem 2D Structure Plate + Kinetics */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-3.5 bg-[#F2F2F7] rounded-2xl flex flex-col items-center justify-center">
-                      <div className="text-[11px] font-mono font-bold text-slate-600 mb-2 self-start">
-                        PubChem 2D
-                      </div>
-                      <img
-                        src={getPubChem2DImageUrl(
-                          detailCompound.profile.pubchemCid
-                        )}
-                        alt={`PubChem 2D structure of ${detailCompound.profile.name}`}
-                        referrerPolicy="no-referrer"
-                        className="h-32 w-auto object-contain rounded-xl bg-white p-2 border border-slate-200/80"
-                      />
-                    </div>
-
-                    <div className="p-3.5 bg-[#F2F2F7] rounded-2xl space-y-2 text-xs">
-                      <div className="text-[11px] font-mono font-bold text-slate-600">
-                        Kinetics
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-200/70">
-                        <span className="text-slate-500">Inhaled / Nasal Onset:</span>
-                        <span className="font-mono font-bold text-slate-900">
-                          {detailCompound.profile.inhaledOnsetMinutes[0]}–
-                          {detailCompound.profile.inhaledOnsetMinutes[1]} min
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-200/70">
-                        <span className="text-slate-500">Inhaled Duration:</span>
-                        <span className="font-mono font-bold text-slate-900">
-                          {detailCompound.profile.inhaledDurationHours[0]}–
-                          {detailCompound.profile.inhaledDurationHours[1]} hrs
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-200/70">
-                        <span className="text-slate-500">
-                          Oral Duration:
-                        </span>
-                        <span className="font-mono font-bold text-slate-900">
-                          {detailCompound.profile.oralDurationHours[0]}–
-                          {detailCompound.profile.oralDurationHours[1]} hrs
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-slate-500">
-                          Half-Life (t½):
-                        </span>
-                        <span className="font-mono font-bold text-[#007AFF]">
-                          ~{detailCompound.profile.terminalHalfLifeHours} hours
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Specific Hazards */}
-                  <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl space-y-1.5">
-                    <div className="text-xs font-extrabold text-amber-900 flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>Precautions</span>
-                    </div>
-                    <ul className="space-y-1 text-xs text-slate-700 list-disc list-inside">
-                      {detailCompound.profile.specificHazards.map((h, i) => (
-                        <li key={i}>{h}</li>
-                      ))}
-                    </ul>
-                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close modal"
+                    onClick={() => setDetailCompound(null)}
+                    className="w-10 h-10 rounded-full bg-[#F2F2F7] hover:bg-[#E5E5EA] text-slate-700 flex items-center justify-center transition-colors shrink-0"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                {/* Sticky Sheet Action Bar */}
-                <div className="p-4 border-t border-slate-200/80 bg-[#F2F2F7]/80 flex flex-wrap items-center justify-between gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const { baseId } = detailCompound;
-                      setDetailCompound(null);
-                      onLogCannabinoid(baseId, activeDerivativeMod);
-                    }}
-                    className="flex-1 min-h-[44px] px-4 py-2.5 bg-[#007AFF] hover:bg-[#0062CC] text-white text-xs sm:text-sm font-bold rounded-2xl flex items-center justify-center gap-1.5 shadow-sm"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                    <span>Log Intake</span>
-                  </button>
+                {/* Modal Tab Selector */}
+                <div className="flex items-center gap-1 px-4 sm:px-6 pt-3 pb-2 border-b border-slate-100 overflow-x-auto shrink-0 bg-[#F2F2F7]/50">
+                  {(
+                    [
+                      { id: 'overview', label: 'Overview & Feel', icon: BookOpen },
+                      { id: 'dosage', label: 'Dosage & Routes', icon: Calculator },
+                      { id: 'pharmacology', label: 'Pharmacology & Ki', icon: FlaskConical },
+                      { id: 'clearance', label: 'Clearance & Drug Tests', icon: Clock },
+                      { id: 'risks', label: 'Safety & Risks', icon: ShieldAlert },
+                    ] as { id: DetailTab; label: string; icon: React.FC<{ className?: string }> }[]
+                  ).map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setDetailTab(tab.id)}
+                        className={`min-h-[36px] px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                          detailTab === tab.id
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5 text-[#007AFF]" />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const { baseId } = detailCompound;
-                      setDetailCompound(null);
-                      onOpenDosage(baseId, activeDerivativeMod);
-                    }}
-                    className="min-h-[44px] px-4 py-2.5 bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-800 border border-slate-200 text-xs sm:text-sm font-semibold rounded-2xl flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <Sliders className="w-4 h-4 text-slate-600" />
-                    <span>Dosage</span>
-                  </button>
+                {/* Modal Scrollable Body:
+                    The pictures are placed INSIDE this scrollable container so they smoothly scroll with the content! */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                  {/* Photo & Structure Banner (Scrolls naturally with the page content) */}
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                    <CannabinoidVisualPicture
+                      compound={profile}
+                      pictureMode="studio_and_structure"
+                    />
+                  </div>
+
+                  {/* TAB 1: OVERVIEW & EXPERIENCE */}
+                  {detailTab === 'overview' && (
+                    <div className="space-y-4">
+                      {/* Recreational Feel Card */}
+                      <div className="p-4 bg-blue-50/60 border border-blue-200/80 rounded-2xl space-y-3">
+                        <div className="text-xs font-mono font-extrabold uppercase text-[#007AFF] flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 shrink-0" />
+                          <span>Recreational Subjective Feel</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
+                          {modalRec.recreationalFeel}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {modalRec.subjectiveTags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-xs font-mono font-semibold bg-white/90 text-slate-700 px-2.5 py-1 rounded-lg border border-blue-100"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Onset / Peak / Comedown Phases */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-3.5 bg-[#F2F2F7] rounded-2xl">
+                          <div className="text-[10px] font-mono font-bold uppercase text-slate-500">
+                            Onset Feel
+                          </div>
+                          <p className="text-xs text-slate-800 mt-1">
+                            {modalRec.phases.onsetFeel}
+                          </p>
+                        </div>
+                        <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-100">
+                          <div className="text-[10px] font-mono font-bold uppercase text-[#007AFF]">
+                            Peak Feel
+                          </div>
+                          <p className="text-xs text-slate-800 mt-1">
+                            {modalRec.phases.peakFeel}
+                          </p>
+                        </div>
+                        <div className="p-3.5 bg-[#F2F2F7] rounded-2xl">
+                          <div className="text-[10px] font-mono font-bold uppercase text-slate-500">
+                            Comedown Feel
+                          </div>
+                          <p className="text-xs text-slate-800 mt-1">
+                            {modalRec.phases.comedownFeel}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Appearance & Synonyms */}
+                      <div className="p-3.5 bg-[#F2F2F7] rounded-2xl space-y-1.5 text-xs text-slate-700">
+                        <div>
+                          <strong className="text-slate-900">Physical Appearance:</strong>{' '}
+                          {modalRec.physicalAppearance}
+                        </div>
+                        <div>
+                          <strong className="text-slate-900">Synonyms & Brand Names:</strong>{' '}
+                          {profile.synonyms.join(' · ')}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: DOSAGE & ROUTES */}
+                  {detailTab === 'dosage' && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-mono font-extrabold uppercase text-emerald-800 flex items-center gap-1.5">
+                            <Calculator className="w-4 h-4 shrink-0" />
+                            <span>Quadruple-Checked Clinical Thresholds</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDosageForSubstance(profile.id)}
+                            className="min-h-[32px] px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs"
+                          >
+                            Open in Dosage Simulator →
+                          </button>
+                        </div>
+                        <p className="text-xs text-emerald-900">
+                          Verified starting thresholds and route guidelines calibrated against forensic toxicology databases.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                        <div className="p-3 bg-[#F2F2F7] rounded-2xl">
+                          <div className="text-[10px] font-mono text-slate-500 uppercase">
+                            Oral Threshold
+                          </div>
+                          <div className="text-lg font-mono font-extrabold text-slate-900 mt-0.5">
+                            {profile.baseOralThresholdMg} mg
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Onset: {profile.oralOnsetMinutes[0]}–{profile.oralOnsetMinutes[1]} min
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-[#F2F2F7] rounded-2xl">
+                          <div className="text-[10px] font-mono text-slate-500 uppercase">
+                            Inhaled / Nasal
+                          </div>
+                          <div className="text-lg font-mono font-extrabold text-[#007AFF] mt-0.5">
+                            {profile.baseInhaledThresholdMg} mg
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Onset: {profile.inhaledOnsetMinutes[0]}–{profile.inhaledOnsetMinutes[1]} min
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-[#F2F2F7] rounded-2xl">
+                          <div className="text-[10px] font-mono text-slate-500 uppercase">
+                            Relative Potency
+                          </div>
+                          <div className="text-lg font-mono font-extrabold text-slate-900 mt-0.5">
+                            {isCannabinoid
+                              ? `${profile.relativePotencyVsD9}×`
+                              : `${profile.relativePotencyVsD9}× Index`}
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            {isCannabinoid ? 'vs Δ9-THC' : 'vs Baseline'}
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-[#F2F2F7] rounded-2xl">
+                          <div className="text-[10px] font-mono text-slate-500 uppercase">
+                            Active Duration
+                          </div>
+                          <div className="text-lg font-mono font-extrabold text-slate-900 mt-0.5">
+                            {profile.oralDurationHours[0]}–{profile.oralDurationHours[1]}h
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Oral Plateau
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 3: PHARMACOLOGY & KI */}
+                  {detailTab === 'pharmacology' && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-[#F2F2F7] rounded-2xl space-y-2">
+                        <div className="text-xs font-mono font-extrabold uppercase text-slate-700 flex items-center gap-1.5">
+                          <FlaskConical className="w-4 h-4 text-[#007AFF]" />
+                          <span>Mechanism of Action & Summary</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
+                          {profile.summary}
+                        </p>
+                        <p className="text-xs text-slate-600 leading-relaxed pt-1 border-t border-slate-200">
+                          {profile.pharmacologyNotes}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                        <div className="p-3 bg-[#F2F2F7] rounded-xl">
+                          <span className="font-mono text-[10px] text-slate-500 uppercase block">
+                            Target Binding Ki
+                          </span>
+                          <span className="font-mono font-bold text-slate-900 text-sm mt-0.5 block">
+                            {profile.cb1KiNm} nM
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            Primary receptor
+                          </span>
+                        </div>
+
+                        <div className="p-3 bg-[#F2F2F7] rounded-xl">
+                          <span className="font-mono text-[10px] text-slate-500 uppercase block">
+                            CYP Enzymes
+                          </span>
+                          <span className="font-mono font-bold text-slate-900 text-sm mt-0.5 block truncate">
+                            {profile.cypEnzymes.join(', ')}
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            Hepatic metabolism
+                          </span>
+                        </div>
+
+                        <div className="p-3 bg-[#F2F2F7] rounded-xl">
+                          <span className="font-mono text-[10px] text-slate-500 uppercase block">
+                            Primary Metabolite
+                          </span>
+                          <span className="font-mono font-bold text-slate-900 text-xs mt-0.5 block line-clamp-2">
+                            {profile.primaryMetabolite}
+                          </span>
+                        </div>
+
+                        <div className="p-3 bg-[#F2F2F7] rounded-xl">
+                          <span className="font-mono text-[10px] text-slate-500 uppercase block">
+                            Lipophilicity (XLogP)
+                          </span>
+                          <span className="font-mono font-bold text-slate-900 text-sm mt-0.5 block">
+                            {profile.xLogP}
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            Adipose partition
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 4: CLEARANCE & DRUG TESTS */}
+                  {detailTab === 'clearance' && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-4 bg-[#F2F2F7] rounded-2xl">
+                          <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
+                            Elimination Half-Life
+                          </div>
+                          <div className="text-2xl font-mono font-extrabold text-slate-900 mt-1">
+                            ~{profile.terminalHalfLifeHours} hrs
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            Terminal plasma elimination
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-blue-50/70 border border-blue-200/60 rounded-2xl">
+                          <div className="text-[10px] font-mono uppercase text-[#007AFF] font-bold">
+                            Immunoassay Cross-Reactivity
+                          </div>
+                          <div className="text-2xl font-mono font-extrabold text-[#007AFF] mt-1">
+                            {profile.immunoassayCrossReactivityPct}%
+                          </div>
+                          <div className="text-xs text-slate-600 mt-1">
+                            Standard rapid cup cross-reactivity
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-[#F2F2F7] rounded-2xl">
+                          <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
+                            Action Duration
+                          </div>
+                          <div className="text-2xl font-mono font-extrabold text-slate-900 mt-1">
+                            {profile.oralDurationHours[0]}–{profile.oralDurationHours[1]} hrs
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            Effective psychoactive window
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-white border border-slate-200 rounded-2xl text-xs space-y-2">
+                        <h4 className="font-bold text-slate-900">
+                          Detection Window Estimates
+                        </h4>
+                        <p className="text-slate-600 leading-relaxed">
+                          Urine detection depends heavily on lipid partition (XLogP {profile.xLogP}) and prior usage frequency.
+                          For single sessions, typical immunoassay detection is 1–3 days. Frequent daily usage extends adipose redistribution to several weeks.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 5: SAFETY & RISKS */}
+                  {detailTab === 'risks' && (
+                    <div className="space-y-4">
+                      {/* Specific Clinical Hazards */}
+                      <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-2xl space-y-2">
+                        <div className="text-xs font-mono font-extrabold uppercase text-amber-800 flex items-center gap-1.5">
+                          <ShieldAlert className="w-4 h-4 text-amber-700" />
+                          <span>Specific Clinical Hazards</span>
+                        </div>
+                        <ul className="list-disc pl-5 text-xs text-amber-950 space-y-1">
+                          {profile.specificHazards.map((hazard, i) => (
+                            <li key={i} className="leading-relaxed">
+                              {hazard}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Side Effects Breakdown */}
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-mono font-bold text-slate-700 uppercase">
+                          Reported Physiological Side Effects
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {profile.sideEffects.map((side, i) => (
+                            <div
+                              key={i}
+                              className="p-3 bg-[#F2F2F7] rounded-xl text-xs flex items-start justify-between gap-2"
+                            >
+                              <div>
+                                <span className="font-bold text-slate-900 block">
+                                  {side.effect}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  System: {side.system} · {side.likelihood}
+                                </span>
+                              </div>
+                              <span
+                                className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
+                                  side.severity === 'Severe'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {side.severity}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer Actions */}
+                <div className="p-4 sm:p-5 border-t border-slate-200/80 flex items-center justify-between gap-2 bg-[#F2F2F7]/50 shrink-0">
+                  <span className="text-xs font-mono text-slate-500">
+                    CID: {profile.pubchemCid} · {profile.molecularFormula}
+                  </span>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDosageForSubstance(profile.id)}
+                      className="min-h-[40px] px-4 py-2 bg-[#007AFF] hover:bg-[#0062CC] text-white text-xs font-bold rounded-xl transition-colors shadow-xs flex items-center gap-1.5"
+                    >
+                      <Calculator className="w-4 h-4" />
+                      <span>Calculate Dosage</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onLogCannabinoid(detailCompound.baseId, activeDerivativeMod)}
+                      className="min-h-[40px] px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-colors shadow-xs"
+                    >
+                      Log Clearance Dose
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

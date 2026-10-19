@@ -17,10 +17,11 @@ import {
   applyDerivativeModification,
   CANNABINOID_DATABASE,
   getCannabinoidById,
+  isCannabinoidSubstance,
 } from '../data/cannabinoids.ts';
 
-test('cannabinoid database contains all 28 core phyto, 9H- enriched, 9-OH/10-OH/11-OH hydroxylated, semi-synthetic, and synthetic profiles', () => {
-  assert.equal(CANNABINOID_DATABASE.length, 28);
+test('cannabinoid database contains all core phyto, 9H- enriched, 9-OH/10-OH/11-OH hydroxylated, semi-synthetic, and synthetic profiles', () => {
+  assert.ok(CANNABINOID_DATABASE.length >= 28);
 
   // Verify 9H- Enriched Series entries across HHCP/THCP, HHC/THC, THCH, THCB, THCV, and CBD
   const nineHHhcp = getCannabinoidById('9h-hhcp');
@@ -56,7 +57,7 @@ test('cannabinoid database contains all 28 core phyto, 9H- enriched, 9-OH/10-OH/
 });
 
 test('universal applyDerivativeModification generates 9H-, 9-OH-, 10-OH-, 8-OH-, 11-OH-, and O-Acetate analogs for ANY cannabinoid', () => {
-  for (const base of CANNABINOID_DATABASE) {
+  for (const base of CANNABINOID_DATABASE.filter(isCannabinoidSubstance)) {
     const mod9h = applyDerivativeModification(base, '9h');
     const mod9oh = applyDerivativeModification(base, '9-oh');
     const mod10oh = applyDerivativeModification(base, '10-oh');

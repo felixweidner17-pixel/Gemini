@@ -5,6 +5,7 @@ import {
   getCannabinoidById,
   isCannabinoidSubstance,
 } from '../data/cannabinoids.ts';
+import { getSubstanceById } from '../data/allSubstances.ts';
 
 export type ToleranceLevel = 'naive' | 'occasional' | 'regular' | 'heavy';
 export type AdministrationRoute = 'inhalation' | 'sublingual' | 'oral';
@@ -133,7 +134,7 @@ export function estimateBodyFatPercentage(
 export function calculatePersonalizedDosage(
   input: DosageInput
 ): DosageTierResult {
-  const compound: CannabinoidProfile = getCannabinoidById(input.cannabinoidId);
+  const compound: CannabinoidProfile = getSubstanceById(input.cannabinoidId);
   const clampedWeight = Math.max(40, Math.min(200, input.weightKg));
 
   // Base threshold dose from compound profile
@@ -393,7 +394,7 @@ export function calculatePersonalizedDosage(
 export function simulateClearanceKinetics(
   input: ClearanceInput
 ): ClearanceSimulationResult {
-  const compound = getCannabinoidById(input.cannabinoidId);
+  const compound = getSubstanceById(input.cannabinoidId);
   const bmi = calculateBMI(input.weightKg, input.heightCm);
   const estimatedBodyFatPct = estimateBodyFatPercentage(
     bmi,
@@ -844,7 +845,7 @@ export function simulateMultiDoseClearance(
 
   // Precompute kinetic parameters for each logged dose
   const preparedEntries = entries.map((entry) => {
-    const baseCompound = getCannabinoidById(entry.cannabinoidId);
+    const baseCompound = getSubstanceById(entry.cannabinoidId);
     const compound = applyDerivativeModification(
       baseCompound,
       entry.derivativeMod || 'native'

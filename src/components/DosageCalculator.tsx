@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
-  CANNABINOID_DATABASE,
   CannabinoidProfile,
-  getCannabinoidById,
   getSubstanceMacroCategory,
   isCannabinoidSubstance,
 } from '../data/cannabinoids';
+import {
+  ALL_SUBSTANCES_DATABASE,
+  getSubstanceById,
+} from '../data/allSubstances';
 import {
   AdministrationRoute,
   calculateBMI,
@@ -18,8 +20,9 @@ import {
   HealthProfileFlags,
   ToleranceLevel,
   VapeVoltageTier,
+  DoseLogEntry,
 } from '../utils/pharmacokinetics';
-import { AlertTriangle, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, CheckCircle2, Clock, Plus } from 'lucide-react';
 import {
   CannabinoidSelect,
   CustomOptionSelect,
@@ -66,7 +69,38 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
     respiratorySensitivity: false,
   });
 
-  const compound: CannabinoidProfile = getCannabinoidById(selectedCannabinoidId);
+  const [compound, setCompound] = useState<CannabinoidProfile>(() =>
+    getSubstanceById(selectedCannabinoidId)
+  );
+  useEffect(() => {
+    setCompound(getSubstanceById(selectedCannabinoidId));
+  }, [selectedCannabinoidId]);
+
+  const [logSuccessMessage, setLogSuccessMessage] = useState<string | null>(null);
+
+  const handleLogCalculatedDose = (mg: number) => {
+    const entry: DoseLogEntry = {
+      id: `dose-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      cannabinoidId: compound.id,
+      derivativeMod: 'native',
+      route,
+      doseMg: Math.round(mg * 100) / 100,
+      timestampIso: new Date().toISOString(),
+      unitLabel: `${mg} mg · ${route}`,
+    };
+    try {
+      const existing = localStorage.getItem('cannapharm_dose_log_entries_v2');
+      const parsed: DoseLogEntry[] = existing ? JSON.parse(existing) : [];
+      const updated = [entry, ...parsed];
+      localStorage.setItem('cannapharm_dose_log_entries_v2', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+      setLogSuccessMessage(`✓ Logged ${mg} mg ${compound.shortName} to Clean Tracker!`);
+      setTimeout(() => setLogSuccessMessage(null), 4000);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const isCannabinoid = isCannabinoidSubstance(compound);
   const macroCategory = getSubstanceMacroCategory(compound.classification);
 
@@ -257,6 +291,50 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
             </div>
           </div>
 
+          {/* Direct Dose Logging into Clean Tracker */}
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Log Dose to Clean Tracker</span>
+              </div>
+              <p className="text-[11px] text-emerald-700 mt-0.5">
+                Doses are logged through the Library to track your exact clean time on the Home Screen.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleLogCalculatedDose(result.lowMg)}
+                className="px-3 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-xs font-bold text-emerald-900 rounded-xl transition-all shadow-2xs"
+              >
+                Log Low ({result.lowMg}mg)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogCalculatedDose(result.moderateMg)}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white rounded-xl transition-all shadow-2xs"
+              >
+                Log Moderate ({result.moderateMg}mg)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogCalculatedDose(result.strongMg)}
+                className="px-3 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-xs font-bold text-emerald-900 rounded-xl transition-all shadow-2xs"
+              >
+                Log High ({result.strongMg}mg)
+              </button>
+            </div>
+          </div>
+
+          {logSuccessMessage && (
+            <div className="p-3 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{logSuccessMessage}</span>
+            </div>
+          )}
+
           {/* Pharmacokinetic Onset, Peak, and Duration Windows */}
           <div className="grid grid-cols-3 gap-2 sm:gap-4 py-4 border-b border-slate-200/70">
             <div className="p-2.5 sm:p-3 bg-[#F2F2F7] rounded-2xl">
@@ -346,11 +424,11 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3.5">
-            {CANNABINOID_DATABASE.filter((c) =>
+            {ALL_SUBSTANCES_DATABASE.filter((c) =>
               isCannabinoid
                 ? isCannabinoidSubstance(c) && c.psychoactive
                 : c.classification === compound.classification
-            ).map((other) => {
+            ).slice(0, 8).map((other) => {
               const ratio = isCannabinoid
                 ? compound.relativePotencyVsD9 /
                   Math.max(0.05, other.relativePotencyVsD9)
@@ -410,7 +488,7 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
             id="dosage-compound-select"
             label="Compound"
             value={compound.id}
-            compounds={CANNABINOID_DATABASE}
+            compounds={ALL_SUBSTANCES_DATABASE}
             dynamicCompound={compound}
             onChange={(newId) => onSelectCannabinoid(newId)}
           />

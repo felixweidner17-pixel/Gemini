@@ -1,6 +1,6 @@
 {
-  "summary": "Comprehensive implementation plan to integrate the newly uploaded substance photographs (Dihydrocodeine, Midazolam, 9H-HHC, 9H-HHCP, CBG, CBN, Alprazolam, Clonazepam, Ketamine, MDMA, Oxycodone), build full pharmacological, clearance, and dosage profiles for Dihydrocodeine & Midazolam, and display real photos as the primary view across the library.",
-  "updatedAt": "2026-10-18T20:43:00.875338163Z",
+  "summary": "Implementation plan to make library substance cards ultra-compact (showing only photo, name, classification, risk tier, potency/threshold, and action buttons) while transferring all comprehensive recreational descriptions, clinical summaries, pharmacology notes, Ki affinities, half-lives, and drug testing metrics exclusively into an organized full-screen tabbed Details modal.",
+  "updatedAt": "2026-10-18T23:54:20.674584987Z",
   "requestFeedback": true,
   "userFacing": true
 }

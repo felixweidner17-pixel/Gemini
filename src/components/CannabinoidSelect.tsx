@@ -168,6 +168,13 @@ export const CannabinoidSelect: React.FC<CannabinoidSelectProps> = ({
           text: 'text-violet-700',
           short: 'Psychedelic',
         };
+      default:
+        return {
+          bg: 'bg-slate-100',
+          border: 'border-slate-200',
+          text: 'text-slate-800',
+          short: typeof cls === 'string' ? cls.slice(0, 16) : 'Substance',
+        };
     }
   };
 

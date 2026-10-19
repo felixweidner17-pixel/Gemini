@@ -10,7 +10,8 @@ export type CannabinoidClass =
   | 'Rx Stimulant'
   | 'Dissociative'
   | 'Empathogen / Stimulant'
-  | 'Psychedelic';
+  | 'Psychedelic'
+  | (string & {});
 
 export type SubstanceMacroCategory =
   | 'Weed & Cannabinoids'
@@ -20,23 +21,32 @@ export type SubstanceMacroCategory =
 export function getSubstanceMacroCategory(
   cls: CannabinoidClass
 ): SubstanceMacroCategory {
-  switch (cls) {
-    case 'Phytocannabinoid':
-    case '9H- Enriched Series':
-    case '9-OH / 10-OH / 11-OH Series':
-    case 'Semi-Synthetic':
-    case 'Synthetic Agonist':
-      return 'Weed & Cannabinoids';
-    case 'Benzodiazepine':
-    case 'Opioid Analgesic':
-    case 'Gabapentinoid':
-    case 'Rx Stimulant':
-      return 'Prescription Pharmaceuticals';
-    case 'Dissociative':
-    case 'Empathogen / Stimulant':
-    case 'Psychedelic':
-      return 'Illicit Substances';
+  const lower = (cls || '').toLowerCase();
+  if (
+    lower.includes('cannabinoid') ||
+    lower.includes('phytocannabinoid') ||
+    lower.includes('semi-synthetic') ||
+    lower.includes('9h-') ||
+    lower.includes('series')
+  ) {
+    return 'Weed & Cannabinoids';
   }
+  if (
+    lower === 'benzodiazepine' ||
+    lower === 'opioid analgesic' ||
+    lower === 'gabapentinoid' ||
+    lower === 'rx stimulant' ||
+    lower.includes('barbiturate') ||
+    lower.includes('quinazolinone') ||
+    lower.includes('carbamate') ||
+    lower.includes('sedative') ||
+    lower.includes('phenidate') ||
+    lower.includes('adamantane') ||
+    lower.includes('anxiolytic')
+  ) {
+    return 'Prescription Pharmaceuticals';
+  }
+  return 'Illicit Substances';
 }
 
 export function isCannabinoidSubstance(
@@ -57,19 +67,9 @@ export const MACRO_CATEGORY_GROUPS: {
     label: 'Weed & Cannabinoids',
     shortLabel: 'Weed',
     subcategories: [
-      { id: 'Phytocannabinoid', label: 'Natural Weed', shortLabel: 'Natural' },
-      { id: '9H- Enriched Series', label: '9H- Series', shortLabel: '9H-' },
-      {
-        id: '9-OH / 10-OH / 11-OH Series',
-        label: 'Hydroxy Cannabinoids',
-        shortLabel: 'Hydroxy',
-      },
-      { id: 'Semi-Synthetic', label: 'HHC & Homologs', shortLabel: 'Homologs' },
-      {
-        id: 'Synthetic Agonist',
-        label: 'Synthetic Cannabinoids',
-        shortLabel: 'Synthetics',
-      },
+      { id: 'Phytocannabinoid', label: 'Natural', shortLabel: 'Natural' },
+      { id: 'Semi-Synthetic', label: 'Semisynthetic', shortLabel: 'Semisynthetic' },
+      { id: 'Synthetic Agonist', label: 'Synthetic', shortLabel: 'Synthetic' },
     ],
   },
   {
@@ -128,7 +128,7 @@ export type DerivativeModType =
   | '11-oh'
   | 'o-acetate';
 
-export type RiskTier = 'Low' | 'Moderate' | 'High' | 'Extreme';
+export type RiskTier = 'Low' | 'Moderate' | 'High' | 'Very High' | 'Extreme';
 
 export interface SideEffectEntry {
   effect: string;
@@ -2614,8 +2614,8 @@ export const CANNABINOID_DATABASE: CannabinoidProfile[] = [
     inhaledDurationHours: [1, 2],
     oralOnsetMinutes: [10, 20],
     oralDurationHours: [2, 4],
-    baseOralThresholdMg: 0.1,
-    baseInhaledThresholdMg: 0.05,
+    baseOralThresholdMg: 0.015,
+    baseInhaledThresholdMg: 0.005,
     radarProfile: {
       cb1AffinityScore: 99,
       euphoriaPotency: 98,
@@ -3011,8 +3011,8 @@ export const CANNABINOID_DATABASE: CannabinoidProfile[] = [
       },
       {
         effect: 'Respiratory Rate Depression at High Doses',
-        system: 'Respiratory',
-        likelihood: 'Moderate',
+        system: 'Pulmonary',
+        likelihood: 'Dose-Dependent',
         severity: 'Severe',
         mechanism: 'Direct blunting of brainstem respiratory rhythm generators to hypercapnia.',
       },
