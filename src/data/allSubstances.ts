@@ -109,7 +109,8 @@ export function getNormalizedMacroCategory(
     lower.includes('sedative') ||
     lower.includes('phenidate') ||
     lower.includes('adamantane') ||
-    lower.includes('anxiolytic')
+    lower.includes('anxiolytic') ||
+    lower.includes('antipsychotic')
   ) {
     return 'Prescription Pharmaceuticals';
   }
@@ -169,14 +170,15 @@ export const MACRO_SUBCATEGORY_MAP: Record<
     },
     {
       id: 'gaba_sedatives',
-      label: 'GABA & Barbiturates',
-      shortLabel: 'GABA / Sedatives',
+      label: 'GABA, Sedatives & Antipsychotics',
+      shortLabel: 'Sedatives & Rx',
       matcher: (s) =>
         s.classification.toLowerCase().includes('gaba') ||
         s.classification.toLowerCase().includes('barbiturate') ||
         s.classification.toLowerCase().includes('quinazolinone') ||
         s.classification.toLowerCase().includes('carbamate') ||
-        s.classification.toLowerCase().includes('sedative'),
+        s.classification.toLowerCase().includes('sedative') ||
+        s.classification.toLowerCase().includes('antipsychotic'),
     },
     {
       id: 'adhd_stimulants',

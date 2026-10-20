@@ -364,8 +364,8 @@ export const CannabinoidSelect: React.FC<CannabinoidSelectProps> = ({
                   <div
                     className={`w-12 h-12 rounded-xl border ${accent.border} ${accent.bg} flex items-center justify-center shrink-0 overflow-hidden p-0.5 mt-0.5`}
                   >
-                    <div className="w-full h-full flex items-center justify-center scale-[0.85] origin-center pointer-events-none">
-                      <ChemicalStructure2D compound={c} />
+                    <div className="w-full h-full flex items-center justify-center pointer-events-none">
+                      <ChemicalStructure2D compound={c} variant="thumbnail" />
                     </div>
                   </div>
 
@@ -466,8 +466,8 @@ export const CannabinoidSelect: React.FC<CannabinoidSelectProps> = ({
             <div
               className={`w-11 h-11 rounded-2xl border ${selectedAccent.border} ${selectedAccent.bg} flex items-center justify-center shrink-0 overflow-hidden p-0.5`}
             >
-              <div className="w-full h-full flex items-center justify-center scale-[0.85] origin-center pointer-events-none">
-                <ChemicalStructure2D compound={selectedCompound} />
+              <div className="w-full h-full flex items-center justify-center pointer-events-none">
+                <ChemicalStructure2D compound={selectedCompound} variant="thumbnail" />
               </div>
             </div>
           )}

@@ -75,12 +75,9 @@ export function App() {
             e.preventDefault();
             setActiveSection('home');
           }}
-          className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 flex items-center gap-1.5 sm:gap-2 min-w-0"
+          className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 flex items-center gap-2 min-w-0"
         >
-          <span>CannaPharm</span>
-          <span className="text-[11px] font-mono font-semibold text-[#007AFF] bg-blue-50 px-2 py-0.5 rounded-full break-words">
-            {primaryCompound.shortName}
-          </span>
+          <span>Daddy’s Little Helper</span>
         </a>
 
         {/* Zone 2: Desktop Segmented Navigation Links */}
@@ -91,7 +88,7 @@ export function App() {
           {(
             [
               { id: 'home', label: 'Home · Clean Status' },
-              { id: 'library', label: 'Substance Library & Dosage' },
+              { id: 'library', label: 'Substance Library' },
             ] as { id: ActiveSection; label: string }[]
           ).map((nav) => (
             <a
@@ -112,27 +109,11 @@ export function App() {
           ))}
         </nav>
 
-        {/* Zone 3: Primary Action / Quick Toggle */}
+        {/* Zone 3: Metadata Badge */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() =>
-              setActiveSection(activeSection === 'library' ? 'home' : 'library')
-            }
-            className="min-h-[34px] px-3.5 py-1 text-xs font-semibold text-white bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] rounded-full transition-all whitespace-nowrap shrink-0 shadow-xs flex items-center gap-1.5"
-          >
-            {activeSection === 'library' ? (
-              <>
-                <Home className="w-3.5 h-3.5" />
-                <span>Home (Clean Status)</span>
-              </>
-            ) : (
-              <>
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>Library (372 Substances)</span>
-              </>
-            )}
-          </button>
+          <span className="text-[11px] font-mono font-semibold text-slate-500 hidden sm:inline">
+            373 Substances
+          </span>
         </div>
       </header>
 
@@ -142,20 +123,7 @@ export function App() {
         className="flex-1 max-w-[1360px] w-full mx-auto px-3 sm:px-6 pt-3 sm:pt-5 space-y-4 sm:space-y-5 overflow-x-hidden"
       >
         {activeSection === 'home' && (
-          <HomeScreen
-            onNavigateToLibrary={(substanceId) => {
-              if (substanceId) {
-                setSelectedId(substanceId);
-              }
-              setActiveSection('library');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            onOpenDosageInLibrary={(substanceId) => {
-              setSelectedId(substanceId);
-              setActiveSection('library');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          />
+          <HomeScreen />
         )}
 
         {activeSection === 'library' && (
@@ -166,11 +134,6 @@ export function App() {
             onLogCannabinoid={(baseId, mod) => {
               handleLogFromLibrary(baseId, mod);
             }}
-            onOpenDosage={(baseId, mod) => {
-              setSelectedId(baseId);
-              setDerivativeMod(mod);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
           />
         )}
       </main>
@@ -179,10 +142,10 @@ export function App() {
       <footer className="hidden md:block border-t border-slate-200/80 bg-white/70 backdrop-blur-md py-4 px-6 mt-8">
         <div className="max-w-[1360px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <div>
-            CannaPharm Toxicokinetic Workbench · Harm-Reduction Pharmacology & Elimination Reference
+            Daddy’s Little Helper · Clinical Pharmacology & Elimination Reference
           </div>
           <div className="font-mono">
-            372 Substances · Forensic Detection Windows & Elimination Half-Life Standards
+            373 Substances · Forensic Detection Windows & Half-Life Standards
           </div>
         </div>
       </footer>
@@ -202,7 +165,7 @@ export function App() {
               },
               {
                 id: 'library',
-                label: 'Library & Dosage',
+                label: 'Substances',
                 icon: BookOpen,
               },
             ] as const

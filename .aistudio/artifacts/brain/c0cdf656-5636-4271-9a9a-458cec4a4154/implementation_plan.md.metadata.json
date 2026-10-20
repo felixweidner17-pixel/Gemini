@@ -1,6 +1,6 @@
 {
-  "summary": "Implementation plan to make library substance cards ultra-compact (showing only photo, name, classification, risk tier, potency/threshold, and action buttons) while transferring all comprehensive recreational descriptions, clinical summaries, pharmacology notes, Ki affinities, half-lives, and drug testing metrics exclusively into an organized full-screen tabbed Details modal.",
-  "updatedAt": "2026-10-18T23:54:20.674584987Z",
+  "summary": "Revised implementation plan to ensure all popular substances (Alcohol, Caffeine, Nicotine, Benzodiazepines, Opioids, Stimulants, Dissociatives, Psychedelics) receive equal first-class depth, clinical parity, and attention as cannabinoids, alongside popularity sorting, complete dosage workbench removal, and the side-by-side Compare feature.",
+  "updatedAt": "2026-10-20T10:05:41.737830283Z",
   "requestFeedback": true,
   "userFacing": true
 }

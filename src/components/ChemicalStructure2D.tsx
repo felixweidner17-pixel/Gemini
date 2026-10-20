@@ -1,813 +1,869 @@
-import React from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { CannabinoidProfile } from '../data/cannabinoids';
+import {
+  generateMolecule3D,
+  ELEMENT_CPK_COLORS,
+  createInitialRotationMatrix,
+  applyTrackballDelta,
+  type Mat3,
+  type ElementSymbol,
+} from '../utils/molecule3DGenerator';
+import {
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
+  Box,
+  Sun,
+  Moon,
+  Move3d,
+} from 'lucide-react';
 
-interface ChemicalStructure2DProps {
+export type RenderStyle3D = 'ball-and-stick' | 'spacefill' | 'sticks';
+
+export interface ChemicalStructure2DProps {
   compound: CannabinoidProfile;
+  variant?: 'card' | 'modal' | 'thumbnail';
+  initialStyle?: RenderStyle3D;
+  defaultDark?: boolean;
+  className?: string;
 }
+
+const isHeadlessEnv =
+  typeof navigator !== 'undefined' &&
+  (navigator.webdriver || /HeadlessChrome/i.test(navigator.userAgent));
 
 export const ChemicalStructure2D: React.FC<ChemicalStructure2DProps> = ({
   compound,
+  variant = 'card',
+  initialStyle = 'ball-and-stick',
+  defaultDark = false,
+  className = '',
 }) => {
-  const id = compound.id;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Determine structural features for accurate 2D skeletal depiction across all catalog and dynamic derivatives
-  const isIndoleOrIndazole = compound.classification === 'Synthetic Agonist';
-  const isOpenRingCbd =
-    id.startsWith('cbd') ||
-    id.startsWith('9h-cbd') ||
-    id.startsWith('h4cbd') ||
-    id.startsWith('cbg') ||
-    id.startsWith('10-oh-cbg');
-  const isAromaticCbn = id.startsWith('cbn');
-  const is9R =
-    compound.classification === '9H- Enriched Series' ||
-    id.startsWith('9h-') ||
-    id.endsWith('-mod-9h');
-  const hasC9Oh = id.startsWith('9-oh-') || id.endsWith('-mod-9oh');
-  const hasC10Oh = id.startsWith('10-oh-') || id.endsWith('-mod-10oh');
-  const hasC8Oh = id.startsWith('8-oh-') || id.endsWith('-mod-8oh');
-  const hasC11Oh = id.startsWith('11-oh-') || id.endsWith('-mod-11oh');
-  const isAcetate = id.includes('acetate') || id.endsWith('-mod-oac');
+  // Generate deterministic 3D conformer immediately (0ms cached, never shifts asynchronously)
+  const activeMolecule = useMemo(
+    () => generateMolecule3D(compound.id, compound.canonicalSmiles),
+    [compound.id, compound.canonicalSmiles]
+  );
 
-  const isDelta9 =
-    !is9R &&
-    (id.startsWith('delta9-') ||
-      id.startsWith('thc-h') ||
-      id.startsWith('thc-b') ||
-      id.startsWith('thcv') ||
-      id.startsWith('thco-') ||
-      id.startsWith('9-oh-thc') ||
-      id.startsWith('10-oh-thc') ||
-      id.startsWith('11-oh-thc'));
-  const isDelta8 = !is9R && id.startsWith('delta8-');
+  const [renderStyle, setRenderStyle] = useState<RenderStyle3D>(initialStyle);
+  const [darkBackdrop, setDarkBackdrop] = useState<boolean>(
+    defaultDark || variant === 'modal'
+  );
+  const [zoom, setZoom] = useState<number>(1.0);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [turnCount, setTurnCount] = useState<number>(0);
+  const [hoveredAtomIdx, setHoveredAtomIdx] = useState<number | null>(null);
 
-  // Alkyl chain carbon count (3 = propyl, 4 = butyl, 5 = pentyl, 6 = hexyl, 7 = heptyl)
-  const chainCarbons = id.includes('thcv')
-    ? 3
-    : id.includes('thcb') || id.includes('thc-b')
-    ? 4
-    : id.includes('thch') || id.includes('thc-h') || id.includes('hhch')
-    ? 6
-    : id.includes('thcp') || id.includes('hhcp')
-    ? 7
-    : 5;
+  // Mutable 3D state in refs for zero-GC pointer dragging
+  const rotMatRef = useRef<Mat3>(createInitialRotationMatrix(0.42, -0.52));
+  const dragStateRef = useRef<{
+    active: boolean;
+    lastX: number;
+    lastY: number;
+    movedDist: number;
+  }>({
+    active: false,
+    lastX: 0,
+    lastY: 0,
+    movedDist: 0,
+  });
+  const projectedAtomsRef = useRef<
+    { index: number; sx: number; sy: number; sr: number; rz: number }[]
+  >([]);
 
-  // Build zig-zag alkyl chain path starting from (162, 108)
-  const buildAlkylPath = (carbons: number) => {
-    const pts: string[] = ['162,108'];
-    let x = 162;
-    let y = 108;
-    for (let i = 1; i <= carbons; i++) {
-      x += 13;
-      y += i % 2 === 1 ? -9 : 9;
-      pts.push(`${x},${y}`);
+  // Reset rotation & zoom when compound changes
+  useEffect(() => {
+    rotMatRef.current = createInitialRotationMatrix(0.42, -0.52);
+    setZoom(1.0);
+    setHoveredAtomIdx(null);
+  }, [compound.id]);
+
+  // Core 3D software-accelerated perspective + Phong-shaded sphere & cylinder renderer
+  const drawScene = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(40, rect.width || (variant === 'thumbnail' ? 48 : 240));
+    const height = Math.max(40, rect.height || (variant === 'thumbnail' ? 48 : 150));
+    const dpr = isHeadlessEnv ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+
+    const targetW = Math.round(width * dpr);
+    const targetH = Math.round(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
     }
-    return {
-      points: pts.join(' '),
-      endX: x,
-      endY: y,
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, width, height);
+
+    // Subtle 3D studio radial lighting backdrop when dark mode is active
+    if (darkBackdrop && variant !== 'thumbnail') {
+      const bgGrad = ctx.createRadialGradient(
+        width * 0.5,
+        height * 0.45,
+        10,
+        width * 0.5,
+        height * 0.5,
+        Math.max(width, height) * 0.7
+      );
+      bgGrad.addColorStop(0, '#1E293B');
+      bgGrad.addColorStop(1, '#0F172A');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Subtle 3D perspective floor grid ring
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(
+        width * 0.5,
+        height * 0.5,
+        Math.min(width, height) * 0.38 * zoom,
+        Math.min(width, height) * 0.38 * zoom,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
+    }
+
+    const { atoms, bonds, boundingRadius } = activeMolecule;
+    if (atoms.length === 0) {
+      ctx.restore();
+      return;
+    }
+
+    const m = rotMatRef.current;
+    const cx = width * 0.5;
+    const cy = height * 0.5;
+    const paddingFactor =
+      variant === 'thumbnail' ? 0.42 : variant === 'modal' ? 0.38 : 0.39;
+    const baseScale =
+      (Math.min(width, height) * paddingFactor * zoom) /
+      Math.max(1.8, boundingRadius);
+    const cameraDist = Math.max(14, boundingRadius * 3.4);
+
+    // 1. Transform & project all 3D atoms
+    const tAtoms = atoms.map((a) => {
+      const rx = m[0] * a.x + m[1] * a.y + m[2] * a.z;
+      const ry = m[3] * a.x + m[4] * a.y + m[5] * a.z;
+      const rz = m[6] * a.x + m[7] * a.y + m[8] * a.z;
+
+      // Perspective projection factor (positive rz is closer to viewer)
+      const persp = cameraDist / Math.max(3, cameraDist - rz);
+      const sx = cx + rx * baseScale * persp;
+      const sy = cy - ry * baseScale * persp;
+
+      const radiusAngstrom =
+        renderStyle === 'spacefill'
+          ? a.vdwRadius * 0.68
+          : renderStyle === 'sticks'
+          ? 0.24
+          : a.covalentRadius * 0.56;
+
+      const sr = Math.max(
+        variant === 'thumbnail' ? 2.2 : 3.2,
+        radiusAngstrom * baseScale * persp
+      );
+
+      // Depth normalized [-1, +1] for atmospheric depth cueing
+      const depthNorm = Math.max(
+        -1,
+        Math.min(1, rz / Math.max(1.5, boundingRadius))
+      );
+
+      return {
+        atom: a,
+        rx,
+        ry,
+        rz,
+        sx,
+        sy,
+        sr,
+        persp,
+        depthNorm,
+      };
+    });
+
+    // Save projected positions for hover/click hit-testing
+    projectedAtomsRef.current = tAtoms.map((ta) => ({
+      index: ta.atom.index,
+      sx: ta.sx,
+      sy: ta.sy,
+      sr: ta.sr,
+      rz: ta.rz,
+    }));
+
+    // 2. Build unified Z-sorted render primitives (half-bonds + atom spheres)
+    type RenderItem =
+      | {
+          kind: 'atom';
+          z: number;
+          ta: (typeof tAtoms)[number];
+        }
+      | {
+          kind: 'bond';
+          z: number;
+          x1: number;
+          y1: number;
+          x2: number;
+          y2: number;
+          order: 1 | 1.5 | 2 | 3;
+          isAromatic: boolean;
+          color: string;
+          thickness: number;
+          depthNorm: number;
+        };
+
+    const renderList: RenderItem[] = [];
+
+    for (const ta of tAtoms) {
+      renderList.push({
+        kind: 'atom',
+        z: ta.rz,
+        ta,
+      });
+    }
+
+    if (renderStyle !== 'spacefill') {
+      for (const b of bonds) {
+        const a1 = tAtoms[b.from];
+        const a2 = tAtoms[b.to];
+        if (!a1 || !a2) continue;
+
+        // Split each bond at midpoint so front half renders in front of back atom and behind front atom
+        const mx = (a1.sx + a2.sx) * 0.5;
+        const my = (a1.sy + a2.sy) * 0.5;
+        const mz = (a1.rz + a2.rz) * 0.5;
+
+        const baseThickness = Math.max(
+          variant === 'thumbnail' ? 1.3 : 2.0,
+          baseScale * (renderStyle === 'sticks' ? 0.22 : 0.16) * ((a1.persp + a2.persp) * 0.5)
+        );
+
+        const c1 = ELEMENT_CPK_COLORS[a1.atom.element].main;
+        const c2 = ELEMENT_CPK_COLORS[a2.atom.element].main;
+
+        renderList.push({
+          kind: 'bond',
+          z: (a1.rz + mz) * 0.5 - 0.04,
+          x1: a1.sx,
+          y1: a1.sy,
+          x2: mx,
+          y2: my,
+          order: b.order,
+          isAromatic: b.isAromatic,
+          color: c1,
+          thickness: baseThickness,
+          depthNorm: (a1.depthNorm + a2.depthNorm) * 0.5,
+        });
+
+        renderList.push({
+          kind: 'bond',
+          z: (a2.rz + mz) * 0.5 - 0.04,
+          x1: mx,
+          y1: my,
+          x2: a2.sx,
+          y2: a2.sy,
+          order: b.order,
+          isAromatic: b.isAromatic,
+          color: c2,
+          thickness: baseThickness,
+          depthNorm: (a1.depthNorm + a2.depthNorm) * 0.5,
+        });
+      }
+    }
+
+    // Painter's algorithm sort: back-to-front (lowest Z to highest Z)
+    renderList.sort((a, b) => a.z - b.z);
+
+    // 3. Render sorted 3D bonds and 3D spheres
+    for (const item of renderList) {
+      if (item.kind === 'bond') {
+        const { x1, y1, x2, y2, order, isAromatic, color, thickness, depthNorm } =
+          item;
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.hypot(dx, dy);
+        if (len < 0.4) continue;
+
+        const nx = -dy / len;
+        const ny = dx / len;
+
+        ctx.globalAlpha = 0.72 + 0.28 * ((depthNorm + 1) * 0.5);
+        ctx.lineCap = 'round';
+
+        const drawCylinderSegment = (
+          sx1: number,
+          sy1: number,
+          sx2: number,
+          sy2: number,
+          w: number,
+          dashed = false
+        ) => {
+          if (dashed) {
+            ctx.setLineDash([Math.max(2, w * 1.2), Math.max(2, w * 1.1)]);
+          } else {
+            ctx.setLineDash([]);
+          }
+          // Outer cylinder body
+          ctx.strokeStyle =
+            color === '#334155' && darkBackdrop ? '#94A3B8' : color;
+          ctx.lineWidth = w;
+          ctx.beginPath();
+          ctx.moveTo(sx1, sy1);
+          ctx.lineTo(sx2, sy2);
+          ctx.stroke();
+
+          // 3D Cylindrical specular highlight ridge
+          if (!dashed && w >= 2.2) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.lineWidth = Math.max(0.8, w * 0.32);
+            ctx.beginPath();
+            ctx.moveTo(sx1 - nx * w * 0.18, sy1 - ny * w * 0.18);
+            ctx.lineTo(sx2 - nx * w * 0.18, sy2 - ny * w * 0.18);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        };
+
+        if (order === 2) {
+          const offset = Math.max(1.6, thickness * 0.85);
+          drawCylinderSegment(
+            x1 + nx * offset,
+            y1 + ny * offset,
+            x2 + nx * offset,
+            y2 + ny * offset,
+            thickness * 0.68
+          );
+          drawCylinderSegment(
+            x1 - nx * offset,
+            y1 - ny * offset,
+            x2 - nx * offset,
+            y2 - ny * offset,
+            thickness * 0.68
+          );
+        } else if (order === 1.5 || isAromatic) {
+          const offset = Math.max(1.5, thickness * 0.82);
+          drawCylinderSegment(
+            x1 - nx * offset * 0.4,
+            y1 - ny * offset * 0.4,
+            x2 - nx * offset * 0.4,
+            y2 - ny * offset * 0.4,
+            thickness * 0.78
+          );
+          drawCylinderSegment(
+            x1 + nx * offset,
+            y1 + ny * offset,
+            x2 + nx * offset,
+            y2 + ny * offset,
+            thickness * 0.55,
+            true
+          );
+        } else if (order === 3) {
+          const offset = Math.max(2.0, thickness * 1.05);
+          drawCylinderSegment(x1, y1, x2, y2, thickness * 0.6);
+          drawCylinderSegment(
+            x1 + nx * offset,
+            y1 + ny * offset,
+            x2 + nx * offset,
+            y2 + ny * offset,
+            thickness * 0.52
+          );
+          drawCylinderSegment(
+            x1 - nx * offset,
+            y1 - ny * offset,
+            x2 - nx * offset,
+            y2 - ny * offset,
+            thickness * 0.52
+          );
+        } else {
+          drawCylinderSegment(x1, y1, x2, y2, thickness);
+        }
+      } else {
+        // 3D Atom Sphere with radial Phong specular shading
+        const { ta } = item;
+        const { atom, sx, sy, sr, depthNorm } = ta;
+        const cpk = ELEMENT_CPK_COLORS[atom.element];
+        const isHovered = hoveredAtomIdx === atom.index;
+
+        ctx.globalAlpha = 0.78 + 0.22 * ((depthNorm + 1) * 0.5);
+
+        // Selection / hover halo
+        if (isHovered) {
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sr + 4.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 3D Radial Gradient (light source at top-left-front)
+        const grad = ctx.createRadialGradient(
+          sx - sr * 0.34,
+          sy - sr * 0.34,
+          sr * 0.08,
+          sx,
+          sy,
+          sr
+        );
+        const mainColor =
+          atom.element === 'C' && darkBackdrop ? '#64748B' : cpk.main;
+        grad.addColorStop(0, cpk.highlight);
+        grad.addColorStop(0.55, mainColor);
+        grad.addColorStop(1, cpk.shadow);
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Crisp rim outline for figure-ground separation
+        ctx.strokeStyle = darkBackdrop
+          ? 'rgba(15, 23, 42, 0.65)'
+          : 'rgba(15, 23, 42, 0.28)';
+        ctx.lineWidth = variant === 'thumbnail' ? 0.5 : 0.8;
+        ctx.stroke();
+
+        // Heteroatom symbol badge on the 3D sphere (O, N, S, Cl, F, Br, I, P, Xe)
+        if (
+          variant !== 'thumbnail' &&
+          atom.element !== 'C' &&
+          sr >= 5.2 &&
+          renderStyle !== 'sticks'
+        ) {
+          ctx.fillStyle = cpk.labelColor;
+          ctx.font = `700 ${Math.round(Math.min(11, Math.max(7.5, sr * 0.92)))}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(atom.element, sx, sy + 0.5);
+        }
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }, [activeMolecule, darkBackdrop, hoveredAtomIdx, renderStyle, variant, zoom]);
+
+  // Observe container resize and draw static 3D frame on state changes
+  useEffect(() => {
+    drawScene();
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      drawScene();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [drawScene]);
+
+  // Pointer Drag Handlers (Turn the 3D molecule around manually in any direction)
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (variant === 'thumbnail') return;
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragStateRef.current = {
+      active: true,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      movedDist: 0,
     };
+    setIsDragging(true);
   };
 
-  const alkyl = buildAlkylPath(chainCarbons);
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (variant === 'thumbnail') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  if (isIndoleOrIndazole) {
+    if (dragStateRef.current.active) {
+      e.stopPropagation();
+      const dx = e.clientX - dragStateRef.current.lastX;
+      const dy = e.clientY - dragStateRef.current.lastY;
+      dragStateRef.current.lastX = e.clientX;
+      dragStateRef.current.lastY = e.clientY;
+      dragStateRef.current.movedDist += Math.hypot(dx, dy);
+
+      const sensitivity = 0.014;
+      const dYaw = dx * sensitivity;
+      const dPitch = dy * sensitivity;
+
+      rotMatRef.current = applyTrackballDelta(rotMatRef.current, dYaw, dPitch);
+      drawScene();
+    } else if (variant === 'modal') {
+      // Hit-test atoms for hover inspection in modal view
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      let bestIdx: number | null = null;
+      let bestZ = -Infinity;
+
+      for (const pa of projectedAtomsRef.current) {
+        const d = Math.hypot(mx - pa.sx, my - pa.sy);
+        if (d <= pa.sr + 4 && pa.rz >= bestZ) {
+          bestZ = pa.rz;
+          bestIdx = pa.index;
+        }
+      }
+      if (bestIdx !== hoveredAtomIdx) {
+        setHoveredAtomIdx(bestIdx);
+      }
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (variant === 'thumbnail') return;
+    if (dragStateRef.current.active) {
+      e.stopPropagation();
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+      if (dragStateRef.current.movedDist > 2) {
+        setTurnCount((c) => c + 1);
+      }
+      dragStateRef.current.active = false;
+      setIsDragging(false);
+      drawScene();
+    }
+  };
+
+  // Keyboard rotation support for accessibility and deterministic testing
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (variant === 'thumbnail') return;
+    const step = 0.28;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      rotMatRef.current = applyTrackballDelta(rotMatRef.current, -step, 0);
+      setTurnCount((c) => c + 1);
+      drawScene();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      rotMatRef.current = applyTrackballDelta(rotMatRef.current, step, 0);
+      setTurnCount((c) => c + 1);
+      drawScene();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      rotMatRef.current = applyTrackballDelta(rotMatRef.current, 0, -step);
+      setTurnCount((c) => c + 1);
+      drawScene();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      rotMatRef.current = applyTrackballDelta(rotMatRef.current, 0, step);
+      setTurnCount((c) => c + 1);
+      drawScene();
+    }
+  };
+
+  const handleResetOrientation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    rotMatRef.current = createInitialRotationMatrix(0.42, -0.52);
+    setZoom(1.0);
+    setTurnCount(0);
+    drawScene();
+  };
+
+  const handleRotateStep = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    rotMatRef.current = applyTrackballDelta(rotMatRef.current, 0.55, 0.25);
+    setTurnCount((c) => c + 1);
+    drawScene();
+  };
+
+  const hoveredAtom =
+    hoveredAtomIdx !== null ? activeMolecule.atoms[hoveredAtomIdx] : null;
+
+  if (variant === 'thumbnail') {
     return (
-      <svg
-        viewBox="0 0 280 175"
-        className="w-full h-40 select-none"
-        role="img"
-        aria-label={`2D skeletal chemical structure of ${compound.name}`}
+      <div
+        ref={containerRef}
+        className={`relative w-full h-full flex items-center justify-center select-none ${className}`}
       >
-        {/* Indole / Indazole Core */}
-        <polygon
-          points="55,65 80,50 105,65 105,95 80,110 55,95"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="2"
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full block pointer-events-none"
+          aria-label={`3D molecular model of ${compound.name}`}
         />
-        <circle
-          cx="80"
-          cy="80"
-          r="15"
-          fill="none"
-          stroke="#64748B"
-          strokeWidth="1.2"
-          strokeDasharray="3 2"
-        />
-        <polygon
-          points="105,65 132,56 146,80 132,104 105,95"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="2"
-        />
-        <text
-          x="130"
-          y="116"
-          className="fill-blue-700 text-[10px] font-mono font-bold"
+      </div>
+    );
+  }
+
+  if (variant === 'modal') {
+    const elementEntries = Object.entries(activeMolecule.elementCounts) as [
+      ElementSymbol,
+      number,
+    ][];
+
+    return (
+      <div
+        ref={containerRef}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        data-testid={`molecule-3d-modal-${compound.id}`}
+        data-turns={turnCount}
+        data-style={renderStyle}
+        role="region"
+        aria-label={`Interactive 3D molecular model of ${compound.name}. Drag or press arrow keys to rotate 360 degrees.`}
+        className={`relative w-full h-64 sm:h-72 rounded-2xl overflow-hidden select-none outline-hidden focus:ring-2 focus:ring-[#007AFF] transition-colors flex flex-col justify-between ${
+          darkBackdrop
+            ? 'bg-slate-900 text-slate-100 border border-slate-700/80'
+            : 'bg-slate-50 text-slate-900 border border-slate-200/90'
+        } ${className}`}
+      >
+        {/* Top Header Bar: 3D Badge + CPK Element Legend (Zero Overlap) */}
+        <div
+          className={`px-3 py-1.5 z-10 flex items-center justify-between gap-2 shrink-0 border-b ${
+            darkBackdrop
+              ? 'bg-slate-900/95 border-slate-800'
+              : 'bg-white/95 border-slate-200/80'
+          }`}
         >
-          N
-        </text>
-        {/* N-Pentyl / Pentenyl Chain */}
-        <polyline
-          points="132,104 142,125 160,132 172,150 190,155"
-          fill="none"
-          stroke="#1A73E8"
-          strokeWidth="2"
-        />
-        {/* Carbonyl / Carboxamide Linker */}
-        <polyline
-          points="146,80 172,72 195,88"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="2"
-        />
-        <line
-          x1="170"
-          y1="72"
-          x2="170"
-          y2="52"
-          stroke="#DC2626"
-          strokeWidth="1.8"
-        />
-        <line
-          x1="174"
-          y1="72"
-          x2="174"
-          y2="52"
-          stroke="#DC2626"
-          strokeWidth="1.8"
-        />
-        <text
-          x="168"
-          y="48"
-          className="fill-rose-700 text-[10px] font-mono font-bold"
-        >
-          O
-        </text>
-        {/* Naphthoyl / tert-Leucine Methyl Ester Group */}
-        <polygon
-          points="195,88 220,75 242,88 242,115 220,128 195,115"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="2"
-        />
-        <text
-          x="14"
-          y="22"
-          className="fill-rose-700 text-[9px] font-mono font-semibold"
-        >
-          {id.startsWith('jwh-018')
-            ? 'Naphthoylindole Scaffold (Full CB1 Agonist)'
-            : 'Indazole-3-Carboxamide (Super-Agonist)'}
-        </text>
-      </svg>
-    );
-  }
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#007AFF] text-white shadow-2xs shrink-0">
+              <Move3d className="w-3 h-3" />
+              <span>
+                3D · DRAG<span className="hidden sm:inline"> TO TURN</span>
+              </span>
+            </span>
+            {hoveredAtom ? (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-sky-500/20 text-sky-300 border border-sky-400/40 truncate">
+                #{hoveredAtom.index + 1} {hoveredAtom.element} (
+                {hoveredAtom.hybridization})
+              </span>
+            ) : (
+              <span
+                className={`text-[10px] font-mono truncate hidden lg:inline ${
+                  darkBackdrop ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                {activeMolecule.atoms.length} atoms · {activeMolecule.bonds.length} bonds
+              </span>
+            )}
+          </div>
 
-  // Benzodiazepine 1,4-diazepine + 5-phenyl scaffold
-  if (compound.classification === 'Benzodiazepine') {
-    const isTriazolo = id === 'alprazolam';
-    const isNitro = id === 'clonazepam';
-    const has3Oh = id === 'lorazepam';
-    return (
-      <svg
-        viewBox="0 0 280 175"
-        className="w-full h-40 select-none"
-        role="img"
-        aria-label={`2D skeletal chemical structure of ${compound.name}`}
-      >
-        {/* Fused Benzene Ring A */}
-        <polygon
-          points="52,65 76,50 100,65 100,95 76,110 52,95"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="2"
-        />
-        <circle
-          cx="76"
-          cy="80"
-          r="14"
-          fill="none"
-          stroke="#64748B"
-          strokeWidth="1.2"
-          strokeDasharray="3 2"
-        />
-        {/* C7 Substituent (Cl or NO2) */}
-        <line x1="52" y1="65" x2="34" y2="54" stroke="#0D9488" strokeWidth="2" />
-        <text x="12" y="53" className="fill-teal-700 text-[10px] font-mono font-bold">
-          {isNitro ? 'O2N' : 'Cl'}
-        </text>
-        {/* 7-Membered 1,4-Diazepine Ring B */}
-        <polyline
-          points="100,65 128,54 150,72 146,100 124,114 100,95"
-          fill="none"
-          stroke="#1A73E8"
-          strokeWidth="2"
-        />
-        <text x="124" y="49" className="fill-blue-700 text-[10px] font-mono font-bold">
-          N1
-        </text>
-        <text x="121" y="126" className="fill-blue-700 text-[10px] font-mono font-bold">
-          N4
-        </text>
-        {/* Triazolo ring (Alprazolam) or C2=O carbonyl */}
-        {isTriazolo ? (
-          <>
-            <polygon
-              points="128,54 146,34 166,46 150,72"
-              fill="none"
-              stroke="#7C3AED"
-              strokeWidth="2"
-            />
-            <text x="145" y="29" className="fill-violet-700 text-[9px] font-mono font-bold">
-              N—N (Triazolo)
-            </text>
-          </>
-        ) : (
-          <>
-            <line x1="150" y1="72" x2="168" y2="64" stroke="#DC2626" strokeWidth="2" />
-            <text x="171" y="66" className="fill-rose-700 text-[10px] font-mono font-bold">
-              =O
-            </text>
-          </>
-        )}
-        {/* C3-OH group on Lorazepam */}
-        {has3Oh && (
-          <>
-            <line x1="146" y1="100" x2="168" y2="108" stroke="#0D9488" strokeWidth="2" />
-            <text x="171" y="112" className="fill-teal-700 text-[10px] font-mono font-bold">
-              OH (C3)
-            </text>
-          </>
-        )}
-        {/* Pendant 5-Phenyl Ring C */}
-        <polygon
-          points="124,114 144,126 144,150 124,162 104,150 104,126"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="1.8"
-        />
-        <text x="14" y="21" className="fill-indigo-700 text-[9px] font-mono font-semibold">
-          {compound.shortName} · 1,4-Benzodiazepine GABAA PAM
-        </text>
-      </svg>
-    );
-  }
+          <div className="flex items-center gap-1 flex-wrap justify-end shrink-0">
+            {elementEntries.map(([el, count]) => (
+              <span
+                key={el}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold ${
+                  darkBackdrop
+                    ? 'bg-slate-800 text-slate-200 border border-slate-700'
+                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                }`}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: ELEMENT_CPK_COLORS[el].main }}
+                />
+                <span>
+                  {el}:{count}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
 
-  // Opioid Analgesics (Morphinan or Phenylcyclohexanol/ene)
-  if (compound.classification === 'Opioid Analgesic') {
-    const isCyclohexylOpioid = id === 'tramadol' || id === 'tilidine';
-    return (
-      <svg
-        viewBox="0 0 280 175"
-        className="w-full h-40 select-none"
-        role="img"
-        aria-label={`2D skeletal chemical structure of ${compound.name}`}
-      >
-        {isCyclohexylOpioid ? (
-          <>
-            {/* Phenyl Ring */}
-            <polygon
-              points="55,68 79,54 103,68 103,96 79,110 55,96"
-              fill="none"
-              stroke="#0F172A"
-              strokeWidth="2"
-            />
-            <circle cx="79" cy="82" r="14" fill="none" stroke="#64748B" strokeWidth="1.2" strokeDasharray="3 2" />
-            {/* C-C Bridge to Cyclohexane / Cyclohexene Ring */}
-            <line x1="103" y1="82" x2="128" y2="82" stroke="#1A73E8" strokeWidth="2.2" />
-            <polygon
-              points="128,82 148,64 176,64 190,82 176,104 148,104"
-              fill="none"
-              stroke="#0F172A"
-              strokeWidth="2"
-            />
-            {/* Dimethylaminoethyl Side Chain */}
-            <polyline points="176,104 198,122 220,116" fill="none" stroke="#1A73E8" strokeWidth="2" />
-            <text x="223" y="120" className="fill-blue-700 text-[10px] font-mono font-bold">
-              N(CH3)2
-            </text>
-            <text x="122" y="54" className="fill-teal-700 text-[10px] font-mono font-bold">
-              {id === 'tramadol' ? 'HO (C1) · OCH3' : 'COOC2H5 (Ester)'}
-            </text>
-          </>
-        ) : (
-          <>
-            {/* Phenanthrene Morphinan Core (Rings A, B, C, D) */}
-            <polygon
-              points="50,65 74,51 98,65 98,93 74,107 50,93"
-              fill="none"
-              stroke="#0F172A"
-              strokeWidth="2"
-            />
-            <polygon
-              points="98,65 122,51 146,65 146,93 122,107 98,93"
-              fill="none"
-              stroke="#0F172A"
-              strokeWidth="2"
-            />
-            <polygon
-              points="122,107 146,93 170,107 170,135 146,149 122,135"
-              fill="none"
-              stroke="#1A73E8"
-              strokeWidth="2"
-            />
-            {/* 4,5-Epoxy Bridge */}
-            <polyline points="74,107 92,128 122,135" fill="none" stroke="#DC2626" strokeWidth="1.8" />
-            <text x="84" y="140" className="fill-rose-700 text-[9px] font-mono font-bold">
-              -O-
-            </text>
-            {/* Piperidine N-CH3 */}
-            <text x="175" y="112" className="fill-blue-700 text-[10px] font-mono font-bold">
-              N-CH3
-            </text>
-            {/* C3 Phenolic OH or OCH3 */}
-            <text x="15" y="62" className="fill-teal-700 text-[10px] font-mono font-bold">
-              {id === 'morphine' ? 'HO (C3)' : 'H3CO (C3)'}
-            </text>
-          </>
-        )}
-        <text x="14" y="21" className="fill-rose-700 text-[9px] font-mono font-semibold">
-          {compound.shortName} · μ-Opioid Receptor (MOR) Agonist
-        </text>
-      </svg>
-    );
-  }
-
-  // Gabapentinoids (Pregabalin / Gabapentin)
-  if (compound.classification === 'Gabapentinoid') {
-    const isPregabalin = id === 'pregabalin';
-    return (
-      <svg
-        viewBox="0 0 280 175"
-        className="w-full h-40 select-none"
-        role="img"
-        aria-label={`2D skeletal chemical structure of ${compound.name}`}
-      >
-        {/* GABA Backbone Chain */}
-        <polyline
-          points="65,98 100,76 138,98 176,76 210,98"
-          fill="none"
-          stroke="#1A73E8"
-          strokeWidth="2.4"
-        />
-        <text x="32" y="103" className="fill-blue-700 text-[10px] font-mono font-bold">
-          H2N
-        </text>
-        <text x="214" y="103" className="fill-rose-700 text-[10px] font-mono font-bold">
-          COOH
-        </text>
-        {isPregabalin ? (
-          <>
-            {/* (S)-3-Isobutyl Branch */}
-            <polyline
-              points="138,98 138,128 116,144 138,128 160,144"
-              fill="none"
-              stroke="#0F172A"
-              strokeWidth="2"
-            />
-            <text x="108" y="160" className="fill-slate-700 text-[9px] font-mono font-semibold">
-              (3S)-Isobutyl Group
-            </text>
-          </>
-        ) : (
-          <>
-            {/* Spiro Cyclohexane Ring at C3 */}
-            <polygon
-              points="138,98 158,116 152,142 124,142 118,116"
-              fill="none"
-              stroke="#0F172A"
-              strokeWidth="2"
-            />
-            <text x="105" y="158" className="fill-slate-700 text-[9px] font-mono font-semibold">
-              3,3-Cyclohexyl Ring
-            </text>
-          </>
-        )}
-        <text x="14" y="21" className="fill-teal-700 text-[9px] font-mono font-semibold">
-          {compound.shortName} · VGCC α2δ-1 Subunit Ligand
-        </text>
-      </svg>
-    );
-  }
-
-  // Dissociatives (Ketamine Arylcyclohexylamine)
-  if (compound.classification === 'Dissociative') {
-    return (
-      <svg
-        viewBox="0 0 280 175"
-        className="w-full h-40 select-none"
-        role="img"
-        aria-label={`2D skeletal chemical structure of ${compound.name}`}
-      >
-        {/* 2-Chlorophenyl Ring */}
-        <polygon
-          points="56,66 80,52 104,66 104,94 80,108 56,94"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="2"
-        />
-        <circle cx="80" cy="80" r="14" fill="none" stroke="#64748B" strokeWidth="1.2" strokeDasharray="3 2" />
-        <text x="98" y="45" className="fill-teal-700 text-[10px] font-mono font-bold">
-          Cl (ortho)
-        </text>
-        {/* C-C Bond to Cyclohexanone Ring */}
-        <line x1="104" y1="80" x2="134" y2="80" stroke="#1A73E8" strokeWidth="2.2" />
-        <polygon
-          points="134,80 156,60 184,68 184,98 156,108"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="2"
-        />
-        {/* Ketone =O at C1 */}
-        <line x1="156" y1="60" x2="156" y2="40" stroke="#DC2626" strokeWidth="2" />
-        <text x="151" y="36" className="fill-rose-700 text-[10px] font-mono font-bold">
-          =O
-        </text>
-        {/* Methylamino Group (-NHCH3) at C2 */}
-        <line x1="134" y1="80" x2="124" y2="115" stroke="#1A73E8" strokeWidth="2" />
-        <text x="108" y="130" className="fill-blue-700 text-[10px] font-mono font-bold">
-          HN—CH3
-        </text>
-        <text x="14" y="21" className="fill-purple-700 text-[9px] font-mono font-semibold">
-          {compound.shortName} · Arylcyclohexylamine NMDA Antagonist
-        </text>
-      </svg>
-    );
-  }
-
-  // Empathogens, Rx Stimulants & Psychedelics
-  if (
-    compound.classification === 'Empathogen / Stimulant' ||
-    compound.classification === 'Rx Stimulant' ||
-    compound.classification === 'Psychedelic'
-  ) {
-    const isMdma = id === 'mdma';
-    const isCocaine = id === 'cocaine';
-    const is2cb = id === '2cb';
-    const isLsd = id === 'lsd-25';
-    const isPsilocybin = id === 'psilocybin';
-
-    return (
-      <svg
-        viewBox="0 0 280 175"
-        className="w-full h-40 select-none"
-        role="img"
-        aria-label={`2D skeletal chemical structure of ${compound.name}`}
-      >
-        {/* Methylenedioxy 5-membered ring for MDMA */}
-        {isMdma && (
-          <>
-            <polygon
-              points="50,66 32,78 50,94"
-              fill="none"
-              stroke="#DC2626"
-              strokeWidth="1.8"
-            />
-            <text x="14" y="83" className="fill-rose-700 text-[9px] font-mono font-bold">
-              O-CH2-O
-            </text>
-          </>
-        )}
-        {/* Core Aromatic / Tropane / Ergoline Ring */}
-        <polygon
-          points="56,64 82,49 108,64 108,94 82,109 56,94"
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth="2"
-        />
-        <circle cx="82" cy="79" r="14" fill="none" stroke="#64748B" strokeWidth="1.2" strokeDasharray="3 2" />
-
-        {/* 2C-B Br and OCH3 substituents */}
-        {is2cb && (
-          <>
-            <text x="24" y="64" className="fill-rose-700 text-[10px] font-mono font-bold">
-              Br (C4)
-            </text>
-            <text x="72" y="42" className="fill-teal-700 text-[9px] font-mono font-bold">
-              OCH3
-            </text>
-            <text x="72" y="124" className="fill-teal-700 text-[9px] font-mono font-bold">
-              OCH3
-            </text>
-          </>
-        )}
-
-        {/* Indole / Ergoline second ring for Psilocybin or LSD-25 */}
-        {(isPsilocybin || isLsd) && (
-          <polygon
-            points="108,64 134,55 148,79 134,103 108,94"
-            fill="none"
-            stroke="#7C3AED"
-            strokeWidth="2"
+        {/* Unobstructed Interactive 3D Canvas */}
+        <div className="relative flex-1 min-h-0 w-full">
+          <canvas
+            ref={canvasRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className={`w-full h-full block touch-none ${
+              isDragging ? 'cursor-grabbing' : 'cursor-grab'
+            }`}
           />
-        )}
+        </div>
 
-        {/* Side Chain (Ethyl-amine / Isopropylamine / Tropane Ester / Diethylamide) */}
-        <polyline
-          points="108,79 142,66 174,86 206,70"
-          fill="none"
-          stroke="#1A73E8"
-          strokeWidth="2.2"
-        />
-        <text x="210" y="74" className="fill-blue-700 text-[10px] font-mono font-bold">
-          {isCocaine
-            ? 'Tropane-COOCH3'
-            : isLsd
-            ? 'CON(C2H5)2'
-            : isPsilocybin
-            ? 'N(CH3)2 · OPO3H2'
-            : isMdma
-            ? 'NH-CH3'
-            : 'NH2'}
-        </text>
-        <text x="14" y="21" className="fill-blue-700 text-[9px] font-mono font-semibold">
-          {compound.shortName} · {compound.classification}
-        </text>
-      </svg>
+        {/* Dedicated Bottom Interactive 3D Control Dock */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className={`px-2.5 py-1.5 z-10 flex flex-wrap items-center justify-between gap-1.5 shrink-0 border-t ${
+            darkBackdrop
+              ? 'bg-slate-900/95 border-slate-800 text-slate-200'
+              : 'bg-white/95 border-slate-200/80 text-slate-700'
+          }`}
+        >
+          {/* 3D Representation Style Buttons */}
+          <div className="flex items-center gap-1">
+            {(
+              [
+                { id: 'ball-and-stick', label: 'Ball & Stick' },
+                { id: 'spacefill', label: 'Spacefill (CPK)' },
+                { id: 'sticks', label: 'Licorice' },
+              ] as const
+            ).map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => setRenderStyle(mode.id)}
+                className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold transition-colors ${
+                  renderStyle === mode.id
+                    ? 'bg-[#007AFF] text-white'
+                    : darkBackdrop
+                    ? 'hover:bg-slate-800 text-slate-300'
+                    : 'hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 3D Turn / Zoom / Theme Controls (Static by default, turns only on user action) */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={`Turn 3D model of ${compound.shortName}`}
+              onClick={handleRotateStep}
+              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1 transition-colors ${
+                darkBackdrop
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+              title="Turn 3D model 45°"
+            >
+              <Move3d className="w-3 h-3 text-[#007AFF]" />
+              <span>Turn</span>
+            </button>
+
+            <button
+              type="button"
+              aria-label="Zoom in 3D structure"
+              onClick={() => setZoom((z) => Math.min(1.8, +(z + 0.18).toFixed(2)))}
+              className={`p-1 rounded-lg transition-colors ${
+                darkBackdrop
+                  ? 'hover:bg-slate-800 text-slate-300'
+                  : 'hover:bg-slate-100 text-slate-600'
+              }`}
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              aria-label="Zoom out 3D structure"
+              onClick={() => setZoom((z) => Math.max(0.65, +(z - 0.18).toFixed(2)))}
+              className={`p-1 rounded-lg transition-colors ${
+                darkBackdrop
+                  ? 'hover:bg-slate-800 text-slate-300'
+                  : 'hover:bg-slate-100 text-slate-600'
+              }`}
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              aria-label="Reset 3D orientation"
+              onClick={handleResetOrientation}
+              className={`p-1 rounded-lg transition-colors ${
+                darkBackdrop
+                  ? 'hover:bg-slate-800 text-slate-300'
+                  : 'hover:bg-slate-100 text-slate-600'
+              }`}
+              title="Reset 3D View"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              aria-label={
+                darkBackdrop ? 'Switch to light 3D backdrop' : 'Switch to dark 3D backdrop'
+              }
+              onClick={() => setDarkBackdrop((d) => !d)}
+              className={`p-1 rounded-lg transition-colors ${
+                darkBackdrop
+                  ? 'hover:bg-slate-800 text-amber-300'
+                  : 'hover:bg-slate-100 text-slate-600'
+              }`}
+              title="Toggle Dark/Light 3D Backdrop"
+            >
+              {darkBackdrop ? (
+                <Sun className="w-3.5 h-3.5" />
+              ) : (
+                <Moon className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
+  // Default: Interactive 3D Card Viewer (used on all Library cards)
   return (
-    <svg
-      viewBox="0 0 280 175"
-      className="w-full h-40 select-none"
-      role="img"
-      aria-label={`2D skeletal chemical structure of ${compound.name}`}
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      data-testid={`molecule-3d-card-${compound.id}`}
+      data-turns={turnCount}
+      data-style={renderStyle}
+      role="region"
+      aria-label={`Interactive 3D molecular model of ${compound.name}. Drag to turn around in 3D.`}
+      className={`relative w-full h-full min-h-[104px] flex items-center justify-center select-none group/mol3d outline-hidden focus:ring-2 focus:ring-[#007AFF] rounded-lg overflow-hidden ${
+        darkBackdrop ? 'bg-slate-900' : ''
+      } ${className}`}
     >
-      {/* Ring A: Cyclohexyl / Terpene Ring (Left) */}
-      <polygon
-        points="42,62 67,47 92,62 92,92 67,107 42,92"
-        fill="none"
-        stroke="#0F172A"
-        strokeWidth="2"
-      />
-
-      {/* Unsaturation indicator in Ring A */}
-      {isDelta9 && (
-        <line
-          x1="70"
-          y1="53"
-          x2="87"
-          y2="63"
-          stroke="#1A73E8"
-          strokeWidth="2"
-        />
-      )}
-      {isDelta8 && (
-        <line
-          x1="47"
-          y1="63"
-          x2="65"
-          y2="53"
-          stroke="#1A73E8"
-          strokeWidth="2"
-        />
-      )}
-      {isAromaticCbn && (
-        <circle
-          cx="67"
-          cy="77"
-          r="14"
-          fill="none"
-          stroke="#64748B"
-          strokeWidth="1.2"
-          strokeDasharray="3 2"
-        />
-      )}
-
-      {/* C9 Methyl & Stereochemistry / C9-OH / C11-OH at top vertex (67,47) */}
-      {is9R ? (
-        <>
-          <polygon points="67,47 63,25 71,25" fill="#1A73E8" />
-          <text
-            x="75"
-            y="28"
-            className="fill-[#1A73E8] text-[9px] font-mono font-bold"
-          >
-            9H / (9R)-CH3
-          </text>
-        </>
-      ) : hasC9Oh ? (
-        <>
-          <line
-            x1="67"
-            y1="47"
-            x2="55"
-            y2="27"
-            stroke="#0F172A"
-            strokeWidth="1.8"
-          />
-          <line
-            x1="67"
-            y1="47"
-            x2="80"
-            y2="27"
-            stroke="#0D9488"
-            strokeWidth="2.2"
-          />
-          <text
-            x="83"
-            y="28"
-            className="fill-teal-700 text-[9.5px] font-mono font-bold"
-          >
-            9-OH
-          </text>
-        </>
-      ) : hasC11Oh ? (
-        <>
-          <polyline
-            points="67,47 67,29 82,21"
-            fill="none"
-            stroke="#0D9488"
-            strokeWidth="2.2"
-          />
-          <text
-            x="85"
-            y="23"
-            className="fill-teal-700 text-[9.5px] font-mono font-bold"
-          >
-            11-OH (C11-CH2OH)
-          </text>
-        </>
-      ) : (
-        <>
-          <line
-            x1="67"
-            y1="47"
-            x2="67"
-            y2="26"
-            stroke="#0F172A"
-            strokeWidth="2"
-          />
-          <text
-            x="72"
-            y="30"
-            className="fill-slate-500 text-[8.5px] font-mono"
-          >
-            C9
-          </text>
-        </>
-      )}
-
-      {/* C8-OH substituent if 8-OH-HHC */}
-      {hasC8Oh && (
-        <>
-          <line
-            x1="42"
-            y1="62"
-            x2="22"
-            y2="50"
-            stroke="#0D9488"
-            strokeWidth="2.2"
-          />
-          <text
-            x="8"
-            y="46"
-            className="fill-teal-700 text-[9.5px] font-mono font-bold"
-          >
-            8-OH
-          </text>
-        </>
-      )}
-
-      {/* C10-OH substituent if 10-OH-HHC or 10-OH-HHCP */}
-      {hasC10Oh && (
-        <>
-          <line
-            x1="92"
-            y1="62"
-            x2="103"
-            y2="42"
-            stroke="#0D9488"
-            strokeWidth="2.2"
-          />
-          <text
-            x="92"
-            y="38"
-            className="fill-teal-700 text-[9.5px] font-mono font-bold"
-          >
-            10-OH
-          </text>
-        </>
-      )}
-
-      {/* Ring B: Dihydropyran Ring (Closed in THC/HHC, Open in CBD/H4CBD) */}
-      {!isOpenRingCbd ? (
-        <>
-          <polyline
-            points="92,62 117,47 142,62 142,92 117,107 92,92"
-            fill="none"
-            stroke="#0F172A"
-            strokeWidth="2"
-          />
-          {/* Pyran Oxygen & gem-dimethyl at C6 */}
-          <circle cx="117" cy="107" r="4" fill="#FFFFFF" />
-          <text
-            x="113"
-            y="111"
-            className="fill-rose-700 text-[9.5px] font-mono font-bold"
-          >
-            O
-          </text>
-          <line
-            x1="92"
-            y1="92"
-            x2="80"
-            y2="115"
-            stroke="#0F172A"
-            strokeWidth="1.8"
-          />
-          <line
-            x1="92"
-            y1="92"
-            x2="100"
-            y2="116"
-            stroke="#0F172A"
-            strokeWidth="1.8"
-          />
-        </>
-      ) : (
-        <>
-          {/* Open ring link & isopropenyl/isopropyl group for CBD / H4-CBD */}
-          <line
-            x1="92"
-            y1="77"
-            x2="117"
-            y2="77"
-            stroke="#0F172A"
-            strokeWidth="2"
-          />
-          <line
-            x1="67"
-            y1="107"
-            x2="67"
-            y2="128"
-            stroke="#0F172A"
-            strokeWidth="2"
-          />
-          <text
-            x="45"
-            y="142"
-            className="fill-teal-700 text-[9px] font-mono font-semibold"
-          >
-            {id === 'h4cbd' ? 'Saturated H4-Ring' : 'Open Pyran (NAM)'}
-          </text>
-        </>
-      )}
-
-      {/* Ring C: Resorcinol / Phenolic Benzene Ring */}
-      <polygon
-        points="117,47 142,33 167,47 167,78 142,92 117,78"
-        fill="none"
-        stroke="#0F172A"
-        strokeWidth="2"
-      />
-      <circle
-        cx="142"
-        cy="62"
-        r="13"
-        fill="none"
-        stroke="#64748B"
-        strokeWidth="1.2"
-        strokeDasharray="3 2"
-      />
-
-      {/* Phenolic C1-OH or O-Acetyl Ester */}
-      <line
-        x1="142"
-        y1="33"
-        x2="142"
-        y2="16"
-        stroke={isAcetate ? '#D97706' : '#0D9488'}
-        strokeWidth="2"
-      />
-      <text
-        x="146"
-        y="16"
-        className={`text-[9.5px] font-mono font-bold ${
-          isAcetate ? 'fill-amber-700' : 'fill-teal-700'
+      <canvas
+        ref={canvasRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        className={`w-full h-full block touch-none ${
+          isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
-      >
-        {isAcetate ? 'O-C(=O)CH3 (Ester)' : 'OH'}
-      </text>
-
-      {/* Alkyl Side Chain at C3 */}
-      <polyline
-        points={`167,78 162,108 ${alkyl.points}`}
-        fill="none"
-        stroke="#1A73E8"
-        strokeWidth="2.2"
       />
-      <circle cx={alkyl.endX} cy={alkyl.endY} r="2.5" fill="#1A73E8" />
-      <text
-        x={Math.min(205, alkyl.endX - 18)}
-        y={alkyl.endY + 16}
-        className="fill-[#1A73E8] text-[9px] font-mono font-bold"
+
+      {/* Interactive 3D Drag Prompt Pill */}
+      <div className="absolute bottom-1 left-1 z-10 pointer-events-none flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-900/75 text-white text-[8.5px] font-mono font-semibold">
+        <Move3d className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+        <span>{isDragging ? 'Turning 3D...' : '3D · Drag'}</span>
+      </div>
+
+      {/* Quick Turn & Style Mini Controls on Card */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="absolute bottom-1 right-1 z-10 flex items-center gap-0.5"
       >
-        C{chainCarbons} ({compound.alkylChainLength.split(' ')[0]})
-      </text>
-    </svg>
+        <button
+          type="button"
+          aria-label={`Turn 3D model of ${compound.shortName}`}
+          onClick={handleRotateStep}
+          title="Turn 3D Model"
+          className="px-1.5 py-0.5 rounded bg-white/90 hover:bg-[#007AFF] hover:text-white text-slate-700 border border-slate-200/90 text-[8.5px] font-mono font-bold transition-colors shadow-2xs"
+        >
+          Turn
+        </button>
+        <button
+          type="button"
+          aria-label={`Toggle CPK spacefill for ${compound.shortName}`}
+          onClick={() =>
+            setRenderStyle((prev) =>
+              prev === 'ball-and-stick' ? 'spacefill' : 'ball-and-stick'
+            )
+          }
+          title="Toggle Ball & Stick / Spacefill CPK"
+          className="p-0.5 rounded bg-white/90 hover:bg-[#007AFF] hover:text-white text-slate-700 border border-slate-200/90 transition-colors shadow-2xs"
+        >
+          <Box className="w-2.5 h-2.5" />
+        </button>
+      </div>
+    </div>
   );
 };
+
+export const ChemicalStructure3D = ChemicalStructure2D;

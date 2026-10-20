@@ -5505,6 +5505,122 @@ export const EXPANDED_SUBSTANCES_PART6: CannabinoidProfile[] = [
       "source": "PubChem CID 29871",
       "pmidOrUrl": "https://pubchem.ncbi.nlm.nih.gov/compound/29871"
     }
+  },
+  {
+    "id": "quetiapine",
+    "name": "Quetiapine (Seroquel · Seroquel XR)",
+    "shortName": "Quetiapine",
+    "synonyms": [
+      "Seroquel",
+      "Seroquel XR",
+      "Ketipinor",
+      "ICI 204636"
+    ],
+    "classification": "Atypical Antipsychotic",
+    "riskTier": "Moderate",
+    "pubchemCid": 5002,
+    "molecularFormula": "C21H25N3O2S",
+    "molecularWeight": 383.51,
+    "canonicalSmiles": "C1CN(CCN1CCOCCO)C2=NC3=CC=CC=C3SC4=CC=CC=C42",
+    "xLogP": 2.7,
+    "cb1KiNm": 11.0,
+    "cb2KiNm": 35.0,
+    "cb1Efficacy": "Histamine H1 (Ki ~11 nM) & 5-HT2A (Ki ~120 nM) Antagonist; Low-Affinity Rapid D2 Antagonist (Ki ~380 nM)",
+    "cb2Efficacy": "Active metabolite Norquetiapine acts as potent NET inhibitor (Ki ~35 nM) & 5-HT1A partial agonist",
+    "relativePotencyVsD9": 0.5,
+    "psychoactive": true,
+    "alkylChainLength": "Dibenzothiazepine Derivative",
+    "cypEnzymes": [
+      "CYP3A4 (Major - 80% hepatic clearance)",
+      "CYP2D6 (Minor)"
+    ],
+    "primaryMetabolite": "Quetiapine Sulfoxide (inactive, major) & Norquetiapine (active NET inhibitor/5-HT1A)",
+    "immunoassayCrossReactivityPct": 0,
+    "terminalHalfLifeHours": 6.5,
+    "inhaledOnsetMinutes": [
+      5,
+      15
+    ],
+    "inhaledDurationHours": [
+      4,
+      8
+    ],
+    "oralOnsetMinutes": [
+      30,
+      60
+    ],
+    "oralDurationHours": [
+      7,
+      10
+    ],
+    "baseOralThresholdMg": 25.0,
+    "baseInhaledThresholdMg": 25.0,
+    "radarProfile": {
+      "cb1AffinityScore": 5,
+      "euphoriaPotency": 5,
+      "somaticSedation": 98,
+      "anxiogenicRisk": 5,
+      "durationPersistence": 58,
+      "lipidRetention": 38
+    },
+    "summary": "Second-generation atypical dibenzothiazepine antipsychotic. At low clinical doses (25–100 mg), quetiapine functions predominantly as a potent histamine H1 and α1-adrenergic antagonist, producing profound hypnotic sedation, physical heaviness, and rapid sleep induction. At moderate-to-high doses (150–800 mg), progressive 5-HT2A antagonism and low-affinity, fast-dissociating D2 dopamine antagonism provide mood-stabilizing and antipsychotic efficacy without significant extrapyramidal side effects.",
+    "pharmacologyNotes": "Quetiapine displays a unique 'hit-and-run' fast dissociation rate from dopamine D2 receptors (dissociating in ~60 seconds vs hours for typical neuroleptics), which prevents sustained striatal D2 occupancy (>80%) and dramatically lowers extrapyramidal symptoms (EPS) and hyperprolactinemia. Pharmacological action is heavily dose-dependent: below 100 mg, H1 blockade (Ki ~11 nM) and α1 blockade (Ki ~22 nM) dominate; between 150–300 mg, 5-HT2A blockade (Ki ~120 nM) and active metabolite norquetiapine (a potent NET inhibitor, Ki ~35 nM, and 5-HT1A agonist) exert antidepressant and anxiolytic effects; above 300 mg, D2 receptor occupancy reaches 60–70% for antipsychotic control. Extensively cleared by CYP3A4 to inactive quetiapine sulfoxide and active norquetiapine. Strong CYP3A4 inhibitors (e.g. ketoconazole, erythromycin) dramatically raise plasma levels, while inducers (e.g. carbamazepine, phenytoin) reduce AUC by up to 80%.",
+    "specificHazards": [
+      "Profound sedation and psychomotor slowing: high risk of morning grogginess ('Seroquel hangover'); avoid driving or operating machinery until individual tolerance is established.",
+      "Orthostatic hypotension and reflex tachycardia from peripheral α1-adrenergic antagonism: patients should rise slowly from supine or seated positions to prevent syncope.",
+      "Dose-dependent QTcF interval prolongation: use with extreme caution in patients with cardiac arrhythmias or when combined with other QT-prolonging drugs (e.g. methadone, citalopram, antiarrhythmics).",
+      "Severe metabolic dysregulation with chronic use: causes significant hyperphagia (H1 + 5-HT2C antagonism), rapid weight gain, dyslipidemia, insulin resistance, and elevated HbA1c.",
+      "Lethal central nervous system depression: never combine with high doses of alcohol, benzodiazepines, opioids, or barbiturates due to synergistic respiratory and cardiac suppression."
+    ],
+    "sideEffects": [
+      {
+        "effect": "Profound Somnolence & Hypnotic Sedation",
+        "system": "CNS",
+        "likelihood": "Common",
+        "severity": "Moderate",
+        "mechanism": "High-potency H1 histaminergic receptor blockade in the reticular activating system"
+      },
+      {
+        "effect": "Orthostatic Hypotension & Dizziness",
+        "system": "Cardiovascular",
+        "likelihood": "Common",
+        "severity": "Moderate",
+        "mechanism": "Peripheral vascular α1-adrenergic receptor blockade impairing baroreflex response"
+      },
+      {
+        "effect": "Xerostomia (Severe Dry Mouth)",
+        "system": "Autonomic",
+        "likelihood": "Common",
+        "severity": "Mild",
+        "mechanism": "Central and peripheral muscarinic M1 receptor antagonism via norquetiapine"
+      },
+      {
+        "effect": "Voracious Appetite & Rapid Weight Gain",
+        "system": "Gastrointestinal",
+        "likelihood": "Common",
+        "severity": "Moderate",
+        "mechanism": "Hypothalamic H1 and 5-HT2C receptor blockade stimulating feeding drive"
+      },
+      {
+        "effect": "Constipation & Slowed GI Motility",
+        "system": "Gastrointestinal",
+        "likelihood": "Occasional",
+        "severity": "Mild",
+        "mechanism": "Anticholinergic attenuation of enteric smooth muscle peristalsis"
+      },
+      {
+        "effect": "Restless Legs Syndrome & Akathisia",
+        "system": "CNS",
+        "likelihood": "Occasional",
+        "severity": "Moderate",
+        "mechanism": "Transient nigrostriatal dopamine D2 receptor blockade"
+      }
+    ],
+    "provenanceCitation": {
+      "label": "Clinical Pharmacology Reference · Quetiapine (Seroquel)",
+      "source": "PubChem CID 5002 · FDA NDA 020639 · Goodman & Gilman's Pharmacological Basis of Therapeutics",
+      "pmidOrUrl": "https://pubchem.ncbi.nlm.nih.gov/compound/5002"
+    }
   }
 ];
 
@@ -6602,6 +6718,23 @@ export const EXPANDED_RECREATIONAL_PART6 = {
       "onsetFeel": "30-90 min",
       "peakFeel": "3-6 hrs",
       "comedownFeel": "24-72 hrs"
+    }
+  },
+  "quetiapine": {
+    "physicalFormLabel": "Prescription Tablet / Coated Film (IR / XR)",
+    "physicalAppearance": "White, peach, or yellow round/biconvex pharmaceutical film-coated tablets debossed with dosage strengths (25mg, 50mg, 100mg, 200mg, 300mg, 400mg).",
+    "recreationalFeel": "Non-euphoriant, intensely somnolent and tranquilizing. At low off-label or starting doses (12.5-50 mg), induces heavy physical sedation, rapid eyelid drooping, emotional flattening, and potent sleep initiation within 45-60 minutes, accompanied by a 'heavy gravity' somatic sensation and intense carbohydrate cravings before sleep. Known colloquially as 'baby heroin' or 'quell' in forensic diversion contexts when misused to abort stimulant binges or bad psychedelic trips ('trip killer'), though devoid of intrinsic dopaminergic euphoria.",
+    "subjectiveTags": [
+      "Heavy Somnolence",
+      "Trip Killer / Acute Anxiolytic",
+      "Somatic Gravity",
+      "Emotional Blunting",
+      "H1 Sedative"
+    ],
+    "phases": {
+      "onsetFeel": "30-60 min (drowsiness & heavy limbs)",
+      "peakFeel": "1.5-3 hrs (profound sedation, dry mouth, sleep urge)",
+      "comedownFeel": "8-14 hrs (morning grogginess, 'hangover' fatigue)"
     }
   }
 };

@@ -291,6 +291,15 @@ export function calculatePersonalizedDosage(
     );
   }
 
+  if (
+    compound.classification.includes('Antipsychotic') ||
+    compound.id === 'quetiapine'
+  ) {
+    clinicalAdvisories.push(
+      `Atypical Antipsychotic / H1 & α1 Antagonist (${compound.shortName}): Profound somnolence, orthostatic hypotension, and dose-dependent QT prolongation. Avoid co-administration with CNS depressants (alcohol, opioids, benzos) or QT-prolonging drugs.`
+    );
+  }
+
   // Co-administered CBD NAM modulation (only applies to cannabinoids)
   let cbdModulator = 1.0;
   if (
@@ -613,9 +622,15 @@ export function simulateClearanceKinetics(
         estimatedDaysMin: u50Min,
         estimatedDaysMax: u50Max,
         detectableOnStandardPanel: detectableStandard,
-        notes: detectableStandard
-          ? `${compound.shortName} exhibits ~${compound.immunoassayCrossReactivityPct}% cross-reactivity on standard 50 ng/mL antibody dipsticks.`
-          : `${compound.shortName} has ${compound.immunoassayCrossReactivityPct}% cross-reactivity on standard THC-COOH dipsticks; requires targeted LC-MS/MS panel.`,
+        notes: isCannabinoid
+          ? (detectableStandard
+              ? `${compound.shortName} exhibits ~${compound.immunoassayCrossReactivityPct}% cross-reactivity on standard 50 ng/mL antibody dipsticks.`
+              : `${compound.shortName} has ${compound.immunoassayCrossReactivityPct}% cross-reactivity on standard THC-COOH dipsticks; requires targeted LC-MS/MS panel.`)
+          : (compound.id === 'quetiapine'
+              ? 'Quetiapine is not screened on standard SAMHSA/NIDA 5-panel or 10-panel workplace drug tests. However, it can cause false positives for Methadone or Tricyclic Antidepressants (TCAs) on rapid immunoassay test cups; confirmatory GC-MS/LC-MS definitively rules out false positives.'
+              : (detectableStandard
+                  ? `${compound.shortName} cross-reacts on standard workplace drug immunoassay panels (~${compound.immunoassayCrossReactivityPct}% reactivity).`
+                  : `${compound.shortName} is not targeted on standard 5/10-panel screens; requires specialized forensic LC-MS/MS quantitation.`)),
       },
       urine15: {
         matrix: 'Urine GC-MS / LC-MS Confirmatory',
@@ -636,7 +651,11 @@ export function simulateClearanceKinetics(
         estimatedDaysMax: bloodMax,
         detectableOnStandardPanel: true,
         notes:
-          'Reflects circulating parent compound and active 11-OH metabolite; prolonged in daily users due to adipose back-diffusion.',
+          compound.id === 'quetiapine'
+            ? 'Reflects circulating parent quetiapine (Cmax ~1.5h) and active norquetiapine; systemic levels clear below clinical threshold within 24–36 hours.'
+            : (isCannabinoid
+                ? 'Reflects circulating parent compound and active 11-OH metabolite; prolonged in daily users due to adipose back-diffusion.'
+                : 'Reflects circulating parent drug in systemic circulation; cleared via hepatic metabolism and renal excretion.'),
       },
       saliva: {
         matrix: 'Oral Fluid (Roadside Swab)',

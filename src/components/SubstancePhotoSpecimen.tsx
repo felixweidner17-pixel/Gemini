@@ -1401,6 +1401,28 @@ export const SubstancePhotoSpecimen: React.FC<SubstancePhotoSpecimenProps> = ({
           </g>
         );
 
+      case 'quetiapine':
+        return (
+          <g>
+            <ellipse cx="90" cy="128" rx="64" ry="10" fill="#000000" opacity="0.35" />
+            {/* Blister pack foil pocket */}
+            <rect x="25" y="42" width="60" height="74" rx="8" fill="#F1F5F9" stroke="#94A3B8" strokeWidth="1.5" />
+            <rect x="30" y="48" width="50" height="28" rx="6" fill="#E2E8F0" stroke="#CBD5E1" strokeWidth="1" />
+            <text x="55" y="65" textAnchor="middle" className="fill-slate-600 text-[8px] font-mono font-bold">SEROQUEL</text>
+            <rect x="30" y="80" width="50" height="28" rx="6" fill="#E2E8F0" stroke="#CBD5E1" strokeWidth="1" />
+            <text x="55" y="97" textAnchor="middle" className="fill-blue-600 text-[8px] font-mono font-extrabold">25 mg</text>
+            {/* Characteristic Round Peach / Yellow Film-Coated Tablet */}
+            <circle cx="125" cy="78" r="28" fill="#FED7AA" stroke="#F97316" strokeWidth="1.8" />
+            <circle cx="125" cy="78" r="23" fill="none" stroke="#FDBA74" strokeWidth="1.2" opacity="0.7" />
+            <text x="125" y="76" textAnchor="middle" className="fill-amber-950 text-[9.5px] font-mono font-extrabold">
+              QTP
+            </text>
+            <text x="125" y="89" textAnchor="middle" className="fill-amber-900 text-[8px] font-mono font-bold">
+              25
+            </text>
+          </g>
+        );
+
       default:
         return (
           <g>
@@ -1473,10 +1495,10 @@ export const SubstancePhotoSpecimen: React.FC<SubstancePhotoSpecimenProps> = ({
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/55 pointer-events-none" />
 
             {/* Top Bar: Real Photo Badge & View Switcher */}
-            <div className="relative z-10 w-full p-2 flex items-center justify-between gap-1.5 pointer-events-auto">
-              <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-emerald-400/30 shadow-xs">
+            <div className="relative z-10 w-full p-1.5 flex items-center justify-between gap-1 pointer-events-auto">
+              <span className="flex items-center gap-1 text-[8.5px] font-mono font-bold text-white bg-black/60 px-1.5 py-0.5 rounded-full border border-emerald-400/30 shadow-xs min-w-0">
                 <Camera className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
-                <span className="truncate">REAL PHOTO</span>
+                <span className="truncate">PHOTO</span>
               </span>
 
               <div className="flex items-center gap-1">

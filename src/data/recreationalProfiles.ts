@@ -1058,6 +1058,25 @@ const BASE_RECREATIONAL_PROFILES: Record<string, RecreationalSubstanceProfile> =
       comedownFeel: 'Long, reflective 4–5 hour glide back to earth with vivid after-imagery.',
     },
   },
+  quetiapine: {
+    physicalFormLabel: 'Prescription Film-Coated Tablet (IR / XR)',
+    physicalAppearance:
+      'Round, biconvex film-coated pharmaceutical tablets (white 25mg, peach/yellow 100mg, white 200mg/300mg) debossed with dosage identifiers.',
+    recreationalFeel:
+      'Non-euphoriant, deeply tranquilizing and hypnotic. At low off-label sleep dosages (12.5–50 mg), induces heavy physical eyelid drooping, somatic gravity, and powerful sleep onset within 45–60 minutes via potent H1 antihistaminic blockade. Frequently diverted and utilized clinically as a rapid "trip killer" to abort severe psychedelic trips or stimulant over-amping, though lacking intrinsic dopamine euphoria.',
+    subjectiveTags: [
+      'Profound Somnolence',
+      'Trip Killer / Acute Anxiolytic',
+      'Heavy Limb Gravity',
+      'Emotional Blunting',
+      'H1 Antihistaminic Sedation',
+    ],
+    phases: {
+      onsetFeel: '30–60 minutes: dry mouth, heavy limbs, slowing thoughts, and unyielding drowsiness.',
+      peakFeel: '1.5–3 hours: profound hypnotic sedation and deep non-REM sleep induction.',
+      comedownFeel: '8–14 hours: sluggish awakening with next-morning grogginess and dry mouth.',
+    },
+  },
 };
 
 export function getRecreationalProfile(

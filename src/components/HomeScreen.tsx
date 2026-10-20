@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ALL_SUBSTANCES_DATABASE,
   getSubstanceById,
 } from '../data/allSubstances';
-import {
-  isCannabinoidSubstance,
-  getSubstanceMacroCategory,
-} from '../data/cannabinoids';
 import {
   calculateBMI,
   DEFAULT_USER_PROFILE,
@@ -18,35 +15,35 @@ import {
   UserAnthropometrics,
 } from '../utils/pharmacokinetics';
 import {
-  Clock,
   CheckCircle2,
-  AlertCircle,
   Trash2,
-  BookOpen,
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
   Sparkles,
-  Search,
   ShieldCheck,
-  Activity,
-  ArrowRight,
-  Droplets,
-  Scale,
+  BarChart3,
+  Calendar,
 } from 'lucide-react';
-
-interface HomeScreenProps {
-  onNavigateToLibrary: (substanceId?: string) => void;
-  onOpenDosageInLibrary: (substanceId: string) => void;
-}
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
+import {
+  analyzeWeeklyConsumption,
+  getSubstanceColor,
+  SubstanceDaySummary,
+} from '../utils/weeklyConsumptionAnalytics';
 
 const STORAGE_KEY_PROFILE = 'cannapharm_user_anthropometrics_v2';
 const STORAGE_KEY_LOG = 'cannapharm_dose_log_entries_v2';
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({
-  onNavigateToLibrary,
-  onOpenDosageInLibrary,
-}) => {
+export const HomeScreen: React.FC = () => {
   // Load anthropometric profile from storage
   const [profile, setProfile] = useState<UserAnthropometrics>(() => {
     try {
@@ -101,11 +98,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Quick Clean-Time Estimator state (for ANY substance from the 372 catalog)
-  const [estimatorSubstanceId, setEstimatorSubstanceId] = useState<string>('delta9-thc');
+  // Quick Clean-Time Estimator state (integrated with all 373 catalog substances)
+  const [estimatorSubstanceId, setEstimatorSubstanceId] = useState<string>('quetiapine');
   const [estimatorSearch, setEstimatorSearch] = useState<string>('');
   const [estimatorFrequency, setEstimatorFrequency] = useState<UsageFrequency>('single');
   const [showProfileDrawer, setShowProfileDrawer] = useState<boolean>(false);
+  const [chartTimeframe, setChartTimeframe] = useState<'7d_daily' | '4w_weekly'>('7d_daily');
+  const [chartMetric, setChartMetric] = useState<'sessions' | 'totalMg'>('sessions');
+
+  // Weekly consumption frequency analytics from cannapharm_dose_log_entries_v2
+  const weeklyAnalytics = useMemo(() => {
+    return analyzeWeeklyConsumption(
+      logEntries,
+      new Date(),
+      (id) => getSubstanceById(id).shortName
+    );
+  }, [logEntries]);
 
   // Multi-dose cumulative clearance simulation for currently logged substances
   const multiDoseResult = useMemo(() => {
@@ -131,16 +139,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     });
   }, [estimatorSubstance, estimatorFrequency, profile]);
 
-  // Filter substances for the quick estimator search
+  // Filter substances for the integrated estimator search
   const filteredSubstances = useMemo(() => {
-    if (!estimatorSearch.trim()) return ALL_SUBSTANCES_DATABASE.slice(0, 50);
+    if (!estimatorSearch.trim()) return ALL_SUBSTANCES_DATABASE;
     const q = estimatorSearch.toLowerCase();
     return ALL_SUBSTANCES_DATABASE.filter(
       (s) =>
         s.shortName.toLowerCase().includes(q) ||
         s.name.toLowerCase().includes(q) ||
         s.classification.toLowerCase().includes(q)
-    ).slice(0, 50);
+    );
   }, [estimatorSearch]);
 
   const handleDeleteEntry = (entryId: string) => {
@@ -172,12 +180,127 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   );
 
   const hasActiveLog = logEntries.length > 0;
-  const isAllClear = !hasActiveLog || (multiDoseResult.isCurrentlyClear50 && multiDoseResult.isCurrentlyClear15);
+  const isAllClear =
+    !hasActiveLog ||
+    (multiDoseResult.isCurrentlyClear50 && multiDoseResult.isCurrentlyClear15);
+
+  // Maximum value for chart Y-axis scaling
+  const activeBuckets =
+    chartTimeframe === '7d_daily'
+      ? weeklyAnalytics.dailyBuckets
+      : weeklyAnalytics.weeklyBuckets;
+
+  const maxVal = useMemo(() => {
+    let peak = 0;
+    for (const b of activeBuckets) {
+      if (b.substances && b.substances.length > 0) {
+        for (const s of b.substances) {
+          const val = chartMetric === 'sessions' ? s.count : s.totalMg;
+          if (val > peak) peak = val;
+        }
+      } else {
+        const val = chartMetric === 'sessions' ? b.sessions : b.totalMg;
+        if (val > peak) peak = val;
+      }
+    }
+    return Math.max(chartMetric === 'sessions' ? 4 : 20, Math.ceil(peak * 1.15));
+  }, [activeBuckets, chartMetric]);
+
+  // Unique substances present in the active period for the legend
+  const activeSubstancesInChart = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of activeBuckets) {
+      if (b.substances) {
+        for (const s of b.substances) {
+          map.set(s.id, s.name);
+        }
+      }
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [activeBuckets]);
+
+  /**
+   * Custom Recharts Bar Shape Component:
+   * "Each new substance gets its own column for the day, but only if required,
+   * and for every new column you have to shrink the size of each one"
+   */
+  const renderMultiSubstanceDayBar = (props: any) => {
+    const { x, width, payload, background } = props;
+    if (!payload) return null;
+
+    const substances: SubstanceDaySummary[] = payload.substances || [];
+    const numSubs = substances.length;
+
+    const baselineY = background
+      ? background.y + background.height
+      : (props.y || 0) + (props.height || 0);
+    const plotHeight = background?.height || 180;
+
+    if (numSubs === 0) {
+      // Zero substances on this day: clean quiet 4px baseline dash
+      return (
+        <rect
+          x={x + width * 0.5 - 2}
+          y={baselineY - 2}
+          width={4}
+          height={2}
+          rx={1}
+          fill="#CBD5E1"
+        />
+      );
+    }
+
+    // Dynamic per-substance column sizing:
+    // Slot width allocated for the day
+    const slotWidth = Math.min(width || 44, 48);
+    const gap = numSubs > 1 ? 2 : 0;
+    // Shrink column width as the number of substances grows
+    const colWidth = Math.max(
+      5,
+      Math.floor((slotWidth - (numSubs - 1) * gap) / numSubs)
+    );
+    const totalGroupWidth = numSubs * colWidth + (numSubs - 1) * gap;
+    const startX = x + (width - totalGroupWidth) * 0.5;
+
+    return (
+      <g>
+        {substances.map((sub, idx) => {
+          const val = chartMetric === 'sessions' ? sub.count : sub.totalMg;
+          const ratio = maxVal > 0 ? Math.min(1, val / maxVal) : 0;
+          const barHeight = Math.max(4, Math.round(ratio * (plotHeight - 16)));
+          const colX = startX + idx * (colWidth + gap);
+          const colY = baselineY - barHeight;
+          const color = getSubstanceColor(sub.id);
+
+          return (
+            <rect
+              key={`${sub.id}-${idx}`}
+              x={colX}
+              y={colY}
+              width={colWidth}
+              height={barHeight}
+              rx={Math.min(3, Math.floor(colWidth / 2))}
+              fill={color}
+              onClick={() => setEstimatorSubstanceId(sub.id)}
+              className="transition-all hover:opacity-85 cursor-pointer"
+            >
+              <title>{`${sub.name}: ${sub.count} session(s), ${sub.totalMg} mg (Click to inspect clean time)`}</title>
+            </rect>
+          );
+        })}
+      </g>
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      {/* MINIMALIST HERO: HOW LONG TILL I'M CLEAN? */}
-      <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs relative overflow-hidden">
+      {/* HERO: Time till negative */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs relative overflow-hidden"
+      >
         {/* Subtle decorative background gradient */}
         <div
           className={`absolute top-0 right-0 w-80 h-80 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20 transition-all opacity-40 ${
@@ -189,12 +312,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-[#007AFF]" />
-                Personal Toxicokinetic Status
-              </span>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
-                How Long Till I&rsquo;m Clean?
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Time till negative
               </h1>
             </div>
 
@@ -378,7 +497,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       ? 'Clean'
                       : formatCountdown(multiDoseResult.hoursFromNowToClearBlood)}
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Active CNS Window</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Active bloodstream</div>
                 </div>
 
                 <div className="p-3 bg-white rounded-xl border border-slate-200/60">
@@ -390,7 +509,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       ? 'Clean'
                       : formatCountdown(multiDoseResult.hoursFromNowToClearSaliva)}
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Roadside Swab</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Roadside swab</div>
                 </div>
               </div>
             </div>
@@ -402,288 +521,357 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <div>
                 <h3 className="text-lg font-bold text-slate-900">All Systems Clear</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                  You have no active doses logged. When you log doses through the Substance Library, your personalized metabolic clearance countdown will appear right here.
+                  You have no active doses logged. When doses are logged from the Substance Library tab, your personalized metabolic clearance countdown and matrix elimination timeline will appear here.
                 </p>
-              </div>
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => onNavigateToLibrary()}
-                  className="px-5 py-2.5 bg-[#007AFF] hover:bg-[#0062CC] text-white text-xs font-bold rounded-full transition-all shadow-xs inline-flex items-center gap-1.5"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>Browse Library to Log a Dose</span>
-                </button>
               </div>
             </div>
           )}
 
-          {/* ACTIVE SUBSTANCES IN SYSTEM (LOGGED THROUGH LIBRARY) */}
+          {/* ACTIVE SUBSTANCES IN SYSTEM */}
           {hasActiveLog && (
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-slate-600 font-mono">
                   Active Substances Logged ({logEntries.length})
                 </h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onNavigateToLibrary()}
-                    className="text-xs font-bold text-[#007AFF] hover:underline flex items-center gap-1"
-                  >
-                    <span>+ Log from Library</span>
-                  </button>
-                  <span className="text-slate-300">·</span>
-                  <button
-                    type="button"
-                    onClick={handleClearAllEntries}
-                    className="text-xs text-red-600 hover:text-red-700 font-semibold"
-                  >
-                    Clear All
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleClearAllEntries}
+                  className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                >
+                  Clear All
+                </button>
               </div>
 
               <div className="space-y-2">
-                {multiDoseResult.entrySummaries.map((summary) => (
-                  <div
-                    key={summary.entryId}
-                    className="p-3.5 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors hover:border-slate-300"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#007AFF] flex items-center justify-center shrink-0 font-bold text-xs font-mono border border-blue-200/60">
-                        {summary.compound.shortName.slice(0, 3)}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-slate-900">
-                            {summary.compound.shortName}
-                          </span>
-                          <span className="text-[10px] font-mono text-[#007AFF] bg-blue-50 px-2 py-0.5 rounded-full">
-                            {summary.doseMg} mg · {summary.route}
-                          </span>
+                <AnimatePresence mode="popLayout">
+                  {multiDoseResult.entrySummaries.map((summary, sIdx) => (
+                    <motion.div
+                      key={summary.entryId}
+                      layout
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      transition={{
+                        duration: 0.25,
+                        ease: [0.16, 1, 0.3, 1],
+                        delay: Math.min(sIdx * 0.03, 0.15),
+                      }}
+                      className="p-3.5 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors hover:border-slate-300"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-xl text-white flex items-center justify-center shrink-0 font-bold text-xs font-mono shadow-2xs"
+                          style={{ backgroundColor: getSubstanceColor(summary.compound.id) }}
+                        >
+                          {summary.compound.shortName.slice(0, 3)}
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          Taken{' '}
-                          {new Date(summary.timestampIso).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}{' '}
-                          ({Math.round(summary.hoursSinceDose)}h ago)
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-slate-900">
+                              {summary.compound.shortName}
+                            </span>
+                            <span className="text-[10px] font-mono text-[#007AFF] bg-blue-50 px-2 py-0.5 rounded-full">
+                              {summary.doseMg} mg · {summary.route}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            Taken{' '}
+                            {new Date(summary.timestampIso).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}{' '}
+                            ({Math.round(summary.hoursSinceDose)}h ago)
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                      <div className="text-right">
-                        <div className="text-[10px] font-mono text-slate-500 uppercase">
-                          Clean In
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                        <div className="text-right">
+                          <div className="text-[10px] font-mono text-slate-500 uppercase">
+                            Clean In
+                          </div>
+                          <div className="text-xs font-mono font-bold text-slate-900">
+                            {summary.individualHoursFromNowToClear15 <= 0
+                              ? 'Cleared'
+                              : `~${formatCountdown(summary.individualHoursFromNowToClear15)}`}
+                          </div>
                         </div>
-                        <div className="text-xs font-mono font-bold text-slate-900">
-                          {summary.individualHoursFromNowToClear15 <= 0
-                            ? 'Cleared'
-                            : `~${formatCountdown(summary.individualHoursFromNowToClear15)}`}
-                        </div>
-                      </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteEntry(summary.entryId)}
-                        title="Remove dose entry"
-                        aria-label={`Remove dose entry for ${summary.compound.shortName}`}
-                        className="p-2 text-slate-400 hover:text-red-600 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEntry(summary.entryId)}
+                          title="Remove dose entry"
+                          aria-label={`Remove dose entry for ${summary.compound.shortName}`}
+                          className="p-2 text-slate-400 hover:text-red-600 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
             </div>
           )}
         </div>
-      </section>
+      </motion.section>
 
-      {/* MINIMALIST QUICK ESTIMATOR: NOT JUST FOR WEED! ANY SUBSTANCE IN THE 372 CATALOG */}
-      <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-5">
-        <div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#007AFF] flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-              Universal Toxicokinetic Calculator
-            </span>
-            <span className="text-[11px] font-mono text-slate-400">
-              372 Substances Supported
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
-            Check Clean Time For Any Substance
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Look up detection windows for opioids, benzodiazepines, stimulants, dissociatives, psychedelics, alcohol, or cannabinoids without logging a dose.
-          </p>
-        </div>
-
-        {/* Substance Selector & Frequency Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 block">
-              Select Substance:
-            </label>
-            <div className="relative">
-              <select
-                value={estimatorSubstanceId}
-                onChange={(e) => setEstimatorSubstanceId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-[#F2F2F7] border border-slate-300/80 rounded-2xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#007AFF] shadow-2xs"
-              >
-                {ALL_SUBSTANCES_DATABASE.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.shortName} ({s.classification})
-                  </option>
-                ))}
-              </select>
+      {/* MERGED: WEEKLY CONSUMPTION FREQUENCY & CLEAN TIME ESTIMATOR CONSOLE */}
+      <motion.section
+        data-testid="weekly-consumption-graph-section"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+        className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6"
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#007AFF] flex items-center gap-1.5">
+                <BarChart3 className="w-3.5 h-3.5" />
+                Consumption & Clearance Telemetry · {weeklyAnalytics.summary.frequencyTier}
+              </span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
+                Weekly Consumption & Clearance Telemetry
+              </h2>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 block">
-              Usage Frequency Pattern:
-            </label>
-            <div className="grid grid-cols-4 gap-1 p-1 bg-[#F2F2F7] rounded-2xl">
-              {(
-                [
-                  { id: 'single', label: 'Single' },
-                  { id: 'occasional', label: '1–2x/wk' },
-                  { id: 'moderate', label: '3–4x/wk' },
-                  { id: 'heavy_chronic', label: 'Daily' },
-                ] as const
-              ).map((f) => (
+          {/* Timeframe & Metric Segmented Controls - Full Line */}
+          <div className="flex items-center justify-between gap-2">
+            <div
+              role="group"
+              aria-label="Chart Timeframe"
+              className="flex items-center gap-1 p-1 bg-[#F2F2F7] rounded-xl"
+            >
+              <button
+                type="button"
+                onClick={() => setChartTimeframe('7d_daily')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                  chartTimeframe === '7d_daily'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                Last 7 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartTimeframe('4w_weekly')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                  chartTimeframe === '4w_weekly'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                4-Week Trend
+              </button>
+            </div>
+
+            <div
+              role="group"
+              aria-label="Chart Metric"
+              className="flex items-center gap-1 p-1 bg-[#F2F2F7] rounded-xl"
+            >
+              <button
+                type="button"
+                onClick={() => setChartMetric('sessions')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                  chartMetric === 'sessions'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                Sessions
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartMetric('totalMg')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                  chartMetric === 'totalMg'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                Total mg
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 4-Column Summary KPI Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-3.5 bg-[#F8F9FB] rounded-2xl border border-slate-200/70">
+            <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
+              7-Day Doses
+            </div>
+            <div className="text-lg sm:text-xl font-extrabold text-slate-900 font-mono mt-0.5">
+              {weeklyAnalytics.summary.totalSessions7d}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {weeklyAnalytics.summary.frequencyTier}
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-[#F8F9FB] rounded-2xl border border-slate-200/70">
+            <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
+              Active vs Clean Days
+            </div>
+            <div className="text-lg sm:text-xl font-extrabold text-[#007AFF] font-mono mt-0.5">
+              {weeklyAnalytics.summary.activeDays7d} / 7 Days
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {weeklyAnalytics.summary.cleanDays7d} clean days this week
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-[#F8F9FB] rounded-2xl border border-slate-200/70">
+            <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
+              7-Day Cumulative
+            </div>
+            <div className="text-lg sm:text-xl font-extrabold text-slate-900 font-mono mt-0.5">
+              {weeklyAnalytics.summary.totalMg7d} mg
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Peak: {weeklyAnalytics.summary.peakDayLabel}
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-[#F8F9FB] rounded-2xl border border-slate-200/70">
+            <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
+              4-Week Rolling Avg
+            </div>
+            <div className="text-lg sm:text-xl font-extrabold text-slate-900 font-mono mt-0.5">
+              {weeklyAnalytics.summary.avgSessionsPerWeek4w} / wk
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              28-day session cadence
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic Multi-Substance Recharts BarChart Viewport */}
+        <div className="p-4 sm:p-5 bg-[#F8F9FB] rounded-2xl border border-slate-200/80 space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-600">
+            <span className="font-semibold">
+              {chartTimeframe === '7d_daily'
+                ? 'Daily Intake'
+                : '4-Week Rolling Window'}
+            </span>
+          </div>
+
+          <div className="w-full h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={activeBuckets}
+                margin={{ top: 12, right: 12, left: -16, bottom: 4 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="#E2E8F0"
+                />
+                <XAxis
+                  dataKey={chartTimeframe === '7d_daily' ? 'dayLabel' : 'weekLabel'}
+                  tick={{ fill: '#475569', fontSize: 11, fontFamily: 'ui-monospace, monospace' }}
+                  axisLine={{ stroke: '#CBD5E1' }}
+                  tickLine={false}
+                />
+                <YAxis
+                  domain={[0, maxVal]}
+                  allowDecimals={chartMetric === 'totalMg'}
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'ui-monospace, monospace' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: 'rgba(0, 122, 255, 0.04)' }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload || !payload.length) return null;
+                    const d: any = payload[0].payload;
+                    const title = d.fullDateLabel || `${d.weekLabel} (${d.rangeLabel})`;
+                    return (
+                      <div className="bg-slate-900 text-white px-3 py-2.5 rounded-xl shadow-lg border border-slate-700 text-xs space-y-1.5 min-w-[170px]">
+                        <div className="font-mono font-bold text-sky-400">
+                          {title}
+                        </div>
+                        <div className="font-semibold text-slate-200">
+                          {d.sessions} {d.sessions === 1 ? 'Session' : 'Sessions'} · {d.totalMg} mg total
+                        </div>
+                        {d.substances && d.substances.length > 0 ? (
+                          <div className="pt-1.5 border-t border-slate-700/80 space-y-1 text-[11px] font-mono">
+                            {d.substances.map((s: SubstanceDaySummary, sIdx: number) => (
+                              <div
+                                key={`tooltip-${s.id}-${sIdx}`}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <span
+                                    className="w-2 h-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: getSubstanceColor(s.id) }}
+                                  />
+                                  <span>{s.name}</span>
+                                </span>
+                                <span className="text-slate-300 font-bold">
+                                  {chartMetric === 'sessions'
+                                    ? `${s.count}×`
+                                    : `${s.totalMg} mg`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-slate-400 font-mono">
+                            No substances logged
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+                <Bar
+                  dataKey={chartMetric}
+                  name="MultiSubstance"
+                  shape={renderMultiSubstanceDayBar}
+                  maxBarSize={48}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Active Substances Legend (if any substances are active in the view) */}
+          {activeSubstancesInChart.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/70 text-xs">
+              <span className="text-[10px] font-mono uppercase text-slate-500 font-bold">
+                Logged Substances:
+              </span>
+              {activeSubstancesInChart.map((s, legIdx) => (
                 <button
-                  key={f.id}
+                  key={`legend-sub-${s.id}-${legIdx}`}
                   type="button"
-                  onClick={() => setEstimatorFrequency(f.id)}
-                  className={`py-1.5 px-2 text-[11px] font-bold rounded-xl transition-all ${
-                    estimatorFrequency === f.id
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-900'
+                  onClick={() => setEstimatorSubstanceId(s.id)}
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-[11px] transition-all border ${
+                    estimatorSubstanceId === s.id
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-2xs font-bold'
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
                   }`}
+                  title="Click to inspect clearance windows below"
                 >
-                  {f.label}
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: getSubstanceColor(s.id) }}
+                  />
+                  <span>{s.name}</span>
                 </button>
               ))}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Minimalist Estimation Output Card */}
-        <div className="p-5 bg-[#F8F9FB] rounded-2xl border border-slate-200/80 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
-            <div>
-              <div className="text-[11px] font-mono text-[#007AFF] font-bold">
-                {estimatorSubstance.classification}
-              </div>
-              <div className="text-lg font-extrabold text-slate-900">
-                {estimatorSubstance.shortName}
-              </div>
-              <div className="text-xs text-slate-500">
-                {estimatorSubstance.name} · t½: ~{estimatorSubstance.terminalHalfLifeHours} hours
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onNavigateToLibrary(estimatorSubstance.id)}
-                className="px-3.5 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-xs font-bold text-slate-800 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
-              >
-                <BookOpen className="w-3.5 h-3.5 text-[#007AFF]" />
-                <span>View in Library</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onOpenDosageInLibrary(estimatorSubstance.id)}
-                className="px-3.5 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] text-xs font-bold text-white rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
-              >
-                <span>Calculate Dose</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Clean Detection Matrices */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 bg-white rounded-xl border border-slate-200/60">
-              <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
-                Urine Screen
-              </div>
-              <div className="text-sm sm:text-base font-extrabold text-[#007AFF] mt-0.5">
-                {singleEstimation.windows.urine50.estimatedDaysMin}–{singleEstimation.windows.urine50.estimatedDaysMax} Days
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">
-                {singleEstimation.windows.urine50.detectableOnStandardPanel
-                  ? 'Standard immunoassay'
-                  : 'Specialized panel needed'}
-              </div>
-            </div>
-
-            <div className="p-3 bg-white rounded-xl border border-slate-200/60">
-              <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
-                Urine GC/MS
-              </div>
-              <div className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5">
-                {singleEstimation.windows.urine15.estimatedDaysMin}–{singleEstimation.windows.urine15.estimatedDaysMax} Days
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Confirmatory limit</div>
-            </div>
-
-            <div className="p-3 bg-white rounded-xl border border-slate-200/60">
-              <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
-                Whole Blood
-              </div>
-              <div className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5">
-                {singleEstimation.windows.blood.estimatedDaysMin}–{singleEstimation.windows.blood.estimatedDaysMax} Days
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Active bloodstream</div>
-            </div>
-
-            <div className="p-3 bg-white rounded-xl border border-slate-200/60">
-              <div className="text-[10px] font-mono uppercase text-slate-500 font-bold">
-                Oral Fluid / Saliva
-              </div>
-              <div className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5">
-                {singleEstimation.windows.saliva.estimatedDaysMin}–{singleEstimation.windows.saliva.estimatedDaysMax} Days
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Roadside swab window</div>
-            </div>
-          </div>
-
-          {/* Testing Advisory Note */}
-          <div className="p-3 bg-white rounded-xl border border-slate-200/60 text-xs text-slate-600 flex items-start gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <strong className="text-slate-900">Forensic Testing Advisory: </strong>
-              {singleEstimation.windows.urine50.notes}
-            </div>
-          </div>
-        </div>
-
-        {/* Minimalist Note on Dose Logging */}
-        <div className="pt-2 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
-          <div>
-            Doses can only be logged directly through the Substance Library & Dosage Workbench.
-          </div>
-          <button
-            type="button"
-            onClick={() => onNavigateToLibrary()}
-            className="text-xs font-bold text-[#007AFF] hover:underline flex items-center gap-1"
-          >
-            <span>Open Library Catalog</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-      </section>
+      </motion.section>
     </div>
   );
 };

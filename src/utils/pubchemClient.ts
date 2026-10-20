@@ -93,3 +93,31 @@ export async function resolveAndFetchPubChemByName(
 export function getPubChem2DImageUrl(cid: number): string {
   return `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/PNG?image_size=300x300`;
 }
+
+const pubchem3dSdfCache = new Map<number, string | null>();
+
+export async function fetchPubChem3DSdf(cid: number): Promise<string | null> {
+  if (!cid || cid <= 0) return null;
+  if (pubchem3dSdfCache.has(cid)) {
+    return pubchem3dSdfCache.get(cid) ?? null;
+  }
+  try {
+    const url = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF?record_type=3d`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      pubchem3dSdfCache.set(cid, null);
+      return null;
+    }
+    const text = await res.text();
+    if (text && text.includes('V2000')) {
+      pubchem3dSdfCache.set(cid, text);
+      return text;
+    }
+    pubchem3dSdfCache.set(cid, null);
+    return null;
+  } catch {
+    pubchem3dSdfCache.set(cid, null);
+    return null;
+  }
+}
+

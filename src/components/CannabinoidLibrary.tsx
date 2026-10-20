@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   applyDerivativeModification,
   CannabinoidClass,
@@ -17,7 +18,8 @@ import {
 import { getRecreationalProfile } from '../data/recreationalProfiles';
 import { ChemicalStructure2D } from './ChemicalStructure2D';
 import { SubstancePhotoSpecimen } from './SubstancePhotoSpecimen';
-import { DosageCalculator } from './DosageCalculator';
+import { SubstanceCompareModal } from './SubstanceCompareModal';
+import { getSubstancePopularityScore } from '../utils/substancePopularity';
 import { getPubChem2DImageUrl } from '../utils/pubchemClient';
 import {
   Search,
@@ -26,12 +28,13 @@ import {
   Eye,
   Sparkles,
   Camera,
-  Calculator,
   Activity,
   ShieldAlert,
   Clock,
   Layers,
   FlaskConical,
+  ArrowRightLeft,
+  Check,
 } from 'lucide-react';
 
 interface CannabinoidLibraryProps {
@@ -39,10 +42,10 @@ interface CannabinoidLibraryProps {
   activeDerivativeMod: DerivativeModType;
   onChangeDerivativeMod: (mod: DerivativeModType) => void;
   onLogCannabinoid: (baseId: string, mod: DerivativeModType) => void;
-  onOpenDosage: (baseId: string, mod: DerivativeModType) => void;
 }
 
 type SortKey =
+  | 'popularity_desc'
   | 'featured'
   | 'potency_desc'
   | 'halflife_desc'
@@ -50,10 +53,11 @@ type SortKey =
   | 'name_asc';
 type PictureMode =
   | 'studio_and_structure'
+  | 'structure_3d_only'
   | 'substance_photo'
   | 'pubchem_official';
 
-type DetailTab = 'overview' | 'dosage' | 'pharmacology' | 'clearance' | 'risks';
+type DetailTab = 'overview' | 'pharmacology' | 'clearance' | 'risks';
 
 export const CannabinoidVisualPicture: React.FC<{
   compound: CannabinoidProfile;
@@ -160,7 +164,32 @@ export const CannabinoidVisualPicture: React.FC<{
     );
   }
 
-  // Combined Specimen Photo + 2D Structure
+  if (pictureMode === 'structure_3d_only') {
+    return (
+      <div
+        className={`relative w-full h-44 bg-gradient-to-br ${theme.bgGradient} overflow-hidden p-2 flex flex-col justify-between`}
+      >
+        <div
+          className={`relative z-10 w-full h-full rounded-xl border ${theme.cardSurface} px-2.5 py-1.5 flex flex-col justify-between shadow-xs`}
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-mono font-bold text-slate-700 truncate">
+              {compound.molecularFormula} · 3D Structure
+            </span>
+            <span className="text-[9px] font-mono font-bold text-[#007AFF] bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
+              {compound.molecularWeight} g/mol · CID {compound.pubchemCid}
+            </span>
+          </div>
+
+          <div className="w-full flex-1 flex items-center justify-center overflow-hidden py-0.5">
+            <ChemicalStructure2D compound={compound} variant="card" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Combined Specimen Photo + Interactive 3D Molecular Structure
   return (
     <div
       className={`relative w-full h-44 bg-gradient-to-br ${theme.bgGradient} overflow-hidden p-2 flex items-center justify-between gap-1.5`}
@@ -175,9 +204,9 @@ export const CannabinoidVisualPicture: React.FC<{
       </div>
 
       <div
-        className={`relative z-10 w-[50%] h-full rounded-xl border ${theme.cardSurface} backdrop-blur-md px-2 py-1.5 flex flex-col justify-between shadow-xs`}
+        className={`relative z-10 w-[50%] h-full rounded-xl border ${theme.cardSurface} px-1.5 py-1 flex flex-col justify-between shadow-xs`}
       >
-        <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center justify-between gap-1 px-0.5">
           <span className="text-[9.5px] font-mono font-bold text-slate-700 truncate">
             {compound.molecularFormula}
           </span>
@@ -186,13 +215,11 @@ export const CannabinoidVisualPicture: React.FC<{
           </span>
         </div>
 
-        <div className="w-full flex-1 flex items-center justify-center overflow-hidden py-0.5">
-          <div className="w-full h-full flex items-center justify-center scale-90 pointer-events-none">
-            <ChemicalStructure2D compound={compound} />
-          </div>
+        <div className="w-full flex-1 flex items-center justify-center overflow-hidden">
+          <ChemicalStructure2D compound={compound} variant="card" />
         </div>
 
-        <div className="flex items-center justify-between text-[8.5px] font-mono text-slate-500 pt-0.5 border-t border-slate-100">
+        <div className="flex items-center justify-between text-[8.5px] font-mono text-slate-500 pt-0.5 px-0.5 border-t border-slate-100">
           <span>CID {compound.pubchemCid}</span>
           <span className="font-bold text-slate-800">
             XLogP {compound.xLogP}
@@ -209,18 +236,19 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
   onChangeDerivativeMod,
   onLogCannabinoid,
 }) => {
-  const [activeView, setActiveView] = useState<'catalog' | 'dosage_workbench'>('catalog');
-  const [workbenchSubstanceId, setWorkbenchSubstanceId] = useState<string>(selectedCompoundId);
-
   const [searchQuery, setSearchQuery] = useState('');
   const [macroFilter, setMacroFilter] = useState<
     'All' | SubstanceMacroCategory
   >('All');
   const [subFilterId, setSubFilterId] = useState<string>('All');
-  const [sortBy, setSortBy] = useState<SortKey>('featured');
+  const [sortBy, setSortBy] = useState<SortKey>('popularity_desc');
   const [pictureMode, setPictureMode] = useState<PictureMode>(
     'studio_and_structure'
   );
+
+  // Compare Selection State [SubstanceA, SubstanceB?]
+  const [compareList, setCompareList] = useState<string[]>([]);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Detail Modal State with Tabs
   const [detailCompound, setDetailCompound] = useState<{
@@ -233,72 +261,110 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
   const availableSubcategories: SubcategoryPill[] =
     macroFilter === 'All' ? [] : MACRO_SUBCATEGORY_MAP[macroFilter] || [];
 
-  // Transform base cannabinoids dynamically if activeDerivativeMod is selected
-  const libraryItems = ALL_SUBSTANCES_DATABASE.map((base, idx) => {
-    const isWeed = getSubstanceMacroCategory(base.classification) === 'Weed & Cannabinoids';
-    const effective = isWeed
-      ? applyDerivativeModification(base, activeDerivativeMod)
-      : base;
-    return {
-      base,
-      effective,
-      index: idx,
-    };
-  });
-
-  const filteredAndSorted = libraryItems
-    .filter(({ base, effective }) => {
-      const macro = getSubstanceMacroCategory(base.classification);
-      const matchesMacro = macroFilter === 'All' || macro === macroFilter;
-
-      // Subcategory filter check
-      let matchesSub = true;
-      if (macroFilter !== 'All' && subFilterId !== 'All') {
-        const activeSub = availableSubcategories.find((s) => s.id === subFilterId);
-        if (activeSub) {
-          matchesSub = activeSub.matcher(effective);
-        }
+  // Toggle substance in compare list (max 2)
+  const handleToggleCompare = (id: string) => {
+    setCompareList((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id);
       }
-
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return matchesMacro && matchesSub;
-
-      const rec = getRecreationalProfile(effective);
-      return (
-        matchesMacro &&
-        matchesSub &&
-        (effective.shortName.toLowerCase().includes(q) ||
-          effective.name.toLowerCase().includes(q) ||
-          base.shortName.toLowerCase().includes(q) ||
-          base.classification.toLowerCase().includes(q) ||
-          macro.toLowerCase().includes(q) ||
-          effective.summary.toLowerCase().includes(q) ||
-          effective.pharmacologyNotes.toLowerCase().includes(q) ||
-          rec.recreationalFeel.toLowerCase().includes(q) ||
-          rec.physicalAppearance.toLowerCase().includes(q) ||
-          rec.subjectiveTags.some((t) => t.toLowerCase().includes(q)) ||
-          base.synonyms.some((s) => s.toLowerCase().includes(q)))
-      );
-    })
-    .sort((a, b) => {
-      if (sortBy === 'featured') {
-        return a.index - b.index;
+      if (prev.length >= 2) {
+        // Replace second substance
+        return [prev[0], id];
       }
-      if (sortBy === 'potency_desc') {
-        return (
-          b.effective.relativePotencyVsD9 - a.effective.relativePotencyVsD9
-        );
-      }
-      if (sortBy === 'halflife_desc') {
-        return (
-          b.effective.terminalHalfLifeHours - a.effective.terminalHalfLifeHours
-        );
-      }
-      if (sortBy === 'logp_desc') {
-        return b.effective.xLogP - a.effective.xLogP;
-      }
-      return a.effective.shortName.localeCompare(b.effective.shortName);
+      return [...prev, id];
     });
+  };
+
+  // Deferred search value to ensure butter-smooth real-time keystroke input without frame drops
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  // Transform base cannabinoids and precompute normalized search tokens
+  const libraryItems = useMemo(() => {
+    return ALL_SUBSTANCES_DATABASE.map((base, idx) => {
+      const isWeed = getSubstanceMacroCategory(base.classification) === 'Weed & Cannabinoids';
+      const effective = isWeed
+        ? applyDerivativeModification(base, activeDerivativeMod)
+        : base;
+      const macro = getSubstanceMacroCategory(base.classification);
+      const rec = getRecreationalProfile(effective);
+
+      // Precompute normalized searchable text string
+      const searchIndex = [
+        effective.shortName,
+        effective.name,
+        base.shortName,
+        base.name,
+        base.classification,
+        macro,
+        effective.molecularFormula,
+        `cid ${effective.pubchemCid}`,
+        effective.summary,
+        effective.pharmacologyNotes,
+        rec.recreationalFeel,
+        rec.physicalAppearance,
+        ...(effective.synonyms || []),
+        ...(base.synonyms || []),
+        ...(rec.subjectiveTags || []),
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      return {
+        base,
+        effective,
+        index: idx,
+        macro,
+        searchIndex,
+        popularityScore: getSubstancePopularityScore(effective),
+      };
+    });
+  }, [activeDerivativeMod]);
+
+  const filteredAndSorted = useMemo(() => {
+    const rawTokens = deferredSearchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+    return libraryItems
+      .filter(({ base, effective, macro, searchIndex }) => {
+        const matchesMacro = macroFilter === 'All' || macro === macroFilter;
+
+        // Subcategory filter check
+        let matchesSub = true;
+        if (macroFilter !== 'All' && subFilterId !== 'All') {
+          const activeSub = availableSubcategories.find((s) => s.id === subFilterId);
+          if (activeSub) {
+            matchesSub = activeSub.matcher(effective);
+          }
+        }
+
+        if (!matchesMacro || !matchesSub) return false;
+        if (rawTokens.length === 0) return true;
+
+        // Multi-token real-time matching
+        return rawTokens.every((token) => searchIndex.includes(token));
+      })
+      .sort((a, b) => {
+        if (sortBy === 'popularity_desc') {
+          return b.popularityScore - a.popularityScore;
+        }
+        if (sortBy === 'featured') {
+          return a.index - b.index;
+        }
+        if (sortBy === 'potency_desc') {
+          return (
+            b.effective.relativePotencyVsD9 - a.effective.relativePotencyVsD9
+          );
+        }
+        if (sortBy === 'halflife_desc') {
+          return (
+            b.effective.terminalHalfLifeHours - a.effective.terminalHalfLifeHours
+          );
+        }
+        if (sortBy === 'logp_desc') {
+          return b.effective.xLogP - a.effective.xLogP;
+        }
+        return a.effective.shortName.localeCompare(b.effective.shortName);
+      });
+  }, [libraryItems, deferredSearchQuery, macroFilter, subFilterId, availableSubcategories, sortBy]);
 
   const getRiskPill = (tier: CannabinoidProfile['riskTier']) => {
     switch (tier) {
@@ -315,15 +381,9 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
     }
   };
 
-  const handleOpenDosageForSubstance = (id: string) => {
-    setWorkbenchSubstanceId(id);
-    setActiveView('dosage_workbench');
-    if (detailCompound) setDetailCompound(null);
-  };
-
   return (
     <div className="space-y-6">
-      {/* Top Header & View Switcher (Catalog vs Dosage Workbench) */}
+      {/* Top Header */}
       <section className="ios-card p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -333,90 +393,62 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 mt-1">
-            Substance Library & Dosage Workbench
+            Substance Library & Atlas
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            Clinical profiles, quadruple-checked threshold values, clearance kinetics, and dosage calculators.
+            Universal pharmacology atlas, 3D molecular conformers, receptor potencies, and side-by-side comparative kinetics.
           </p>
         </div>
 
-        {/* View Toggle Pill */}
-        <div className="flex items-center gap-1.5 p-1 bg-[#E5E5EA]/85 rounded-full shrink-0 self-start md:self-auto">
-          <button
-            type="button"
-            onClick={() => setActiveView('catalog')}
-            className={`min-h-[36px] px-4 py-1.5 text-xs rounded-full font-bold transition-all flex items-center gap-1.5 ${
-              activeView === 'catalog'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Catalog ({filteredAndSorted.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveView('dosage_workbench')}
-            className={`min-h-[36px] px-4 py-1.5 text-xs rounded-full font-bold transition-all flex items-center gap-1.5 ${
-              activeView === 'dosage_workbench'
-                ? 'bg-[#007AFF] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Calculator className="w-3.5 h-3.5" />
-            <span>Dosage Workbench</span>
-          </button>
-        </div>
-      </section>
-
-      {/* VIEW A: INTEGRATED DOSAGE WORKBENCH */}
-      {activeView === 'dosage_workbench' && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between bg-blue-50/80 border border-blue-200/80 px-4 py-2.5 rounded-2xl">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-              <Calculator className="w-4 h-4 text-[#007AFF]" />
-              <span>Interactive Dosage Workbench Active</span>
-            </div>
+        {/* Compare Quick Action if substances selected */}
+        <div className="flex items-center gap-2">
+          {compareList.length > 0 && (
             <button
               type="button"
-              onClick={() => setActiveView('catalog')}
-              className="text-xs font-bold text-[#007AFF] hover:underline"
+              onClick={() => setIsCompareModalOpen(true)}
+              className="min-h-[38px] px-4 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] text-white text-xs font-bold rounded-full transition-all flex items-center gap-1.5 shadow-xs"
             >
-              ← Back to Substance Catalog
+              <ArrowRightLeft className="w-3.5 h-3.5" />
+              <span>Compare Selected ({compareList.length}/2)</span>
             </button>
-          </div>
-          <DosageCalculator
-            selectedCannabinoidId={workbenchSubstanceId}
-            onSelectCannabinoid={(id) => setWorkbenchSubstanceId(id)}
-          />
-        </section>
-      )}
-
-      {/* VIEW B: COMPACT SUBSTANCE CATALOG */}
-      {activeView === 'catalog' && (
+          )}
+        </div>
+      </section>
         <>
           {/* Controls Panel: Search, Category, Subcategories & Cannabinoid Variant Dropdown */}
           <section className="ios-card p-4 sm:p-5 space-y-4">
             <div className="flex flex-col lg:flex-row gap-3">
-              {/* Search Bar */}
+              {/* Real-time Search Input */}
               <div className="relative flex-1">
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name, synonym, or classification..."
-                  className="w-full min-h-[42px] pl-10 pr-9 py-2 bg-[#F2F2F7] rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#007AFF]"
+                  placeholder="Filter 373 substances by name, synonym, category, or formula..."
+                  className="w-full min-h-[44px] pl-10 pr-24 py-2 bg-[#F2F2F7] hover:bg-[#EBEBEF] focus:bg-white rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#007AFF] transition-all border border-transparent focus:border-blue-200"
                 />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  {searchQuery ? (
+                    <>
+                      <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded shadow-2xs border border-slate-200">
+                        {filteredAndSorted.length} match{filteredAndSorted.length === 1 ? '' : 'es'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        aria-label="Clear search query"
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-[10px] font-mono font-semibold text-slate-400 px-1.5 py-0.5 rounded border border-slate-200/60 hidden sm:inline">
+                      {filteredAndSorted.length} items
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Picture Mode Switcher */}
@@ -430,7 +462,18 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Photo + 2D
+                  Photo + 3D
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPictureMode('structure_3d_only')}
+                  className={`min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                    pictureMode === 'structure_3d_only'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  3D Model Only
                 </button>
                 <button
                   type="button"
@@ -454,7 +497,8 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                   onChange={(e) => setSortBy(e.target.value as SortKey)}
                   className="min-h-[38px] px-3 py-1.5 bg-[#F2F2F7] rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#007AFF]"
                 >
-                  <option value="featured">Featured Order</option>
+                  <option value="popularity_desc">Popularity (High to Low)</option>
+                  <option value="featured">Standard Catalog</option>
                   <option value="name_asc">Name (A-Z)</option>
                   <option value="potency_desc">Highest Potency</option>
                   <option value="halflife_desc">Longest Half-Life</option>
@@ -477,7 +521,7 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                     },
                     {
                       id: 'Weed & Cannabinoids',
-                      label: `Weed & Cannabinoids (${
+                      label: `Cannabinoids & Botanicals (${
                         ALL_SUBSTANCES_DATABASE.filter(
                           (c) =>
                             getSubstanceMacroCategory(c.classification) ===
@@ -633,81 +677,107 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredAndSorted.map(({ base, effective }) => {
-                const isCannabinoid = isCannabinoidSubstance(effective);
+            <motion.div
+              layout
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+            >
+              <AnimatePresence mode="popLayout">
+                {filteredAndSorted.map(({ base, effective }, idx) => {
+                  const isCannabinoid = isCannabinoidSubstance(effective);
 
-                return (
-                  <article
-                    key={effective.id}
-                    className="ios-card overflow-hidden flex flex-col justify-between transition-all hover:shadow-md group border border-slate-200/80 bg-white"
-                  >
-                    <div>
-                      {/* Compact Photo & Structure Specimen Header */}
-                      <CannabinoidVisualPicture
-                        compound={effective}
-                        pictureMode={pictureMode}
-                      />
+                  return (
+                    <motion.article
+                      key={effective.id}
+                      layout
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      transition={{
+                        duration: 0.24,
+                        ease: [0.16, 1, 0.3, 1],
+                        delay: Math.min(idx * 0.02, 0.2),
+                      }}
+                      className="ios-card overflow-hidden flex flex-col justify-between transition-shadow hover:shadow-md group border border-slate-200/80 bg-white"
+                    >
+                      <div>
+                        {/* Compact Photo & Structure Specimen Header */}
+                        <CannabinoidVisualPicture
+                          compound={effective}
+                          pictureMode={pictureMode}
+                        />
 
-                      {/* Compact Card Body: Strictly Name, Classification, Risk Badge, and Potency ONLY */}
-                      <div className="p-3.5 space-y-2.5">
-                        <div className="flex items-start justify-between gap-1.5">
-                          <span className="text-[11px] font-mono font-bold text-[#007AFF] truncate">
-                            {effective.classification}
-                          </span>
-                          <span
-                            className={`text-[9.5px] font-mono px-2 py-0.5 rounded-full border shrink-0 ${getRiskPill(
-                              effective.riskTier
-                            )}`}
-                          >
-                            {effective.riskTier} Risk
-                          </span>
-                        </div>
+                        {/* Compact Card Body: Strictly Name, Classification, Risk Badge, and Potency ONLY */}
+                        <div className="p-3.5 space-y-2.5">
+                          <div className="flex items-start justify-between gap-1.5">
+                            <span className="text-[11px] font-mono font-bold text-[#007AFF] truncate">
+                              {effective.classification}
+                            </span>
+                            <span
+                              className={`text-[9.5px] font-mono px-2 py-0.5 rounded-full border shrink-0 ${getRiskPill(
+                                effective.riskTier
+                              )}`}
+                            >
+                              {effective.riskTier} Risk
+                            </span>
+                          </div>
 
-                        <div>
-                          <h2 className="text-base font-extrabold text-slate-900 leading-snug line-clamp-1">
-                            {effective.shortName}
-                          </h2>
-                          <p className="text-xs text-slate-500 truncate mt-0.5">
-                            {effective.name}
-                          </p>
+                          <div>
+                            <h2 className="text-base font-extrabold text-slate-900 leading-snug line-clamp-1">
+                              {effective.shortName}
+                            </h2>
+                            <p className="text-xs text-slate-500 truncate mt-0.5">
+                              {effective.name}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Action Buttons: Details (opens modal) & Dosage (opens workbench) */}
-                    <div className="p-3 pt-1 border-t border-slate-100 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetailCompound({
-                            baseId: base.id,
-                            profile: effective,
-                          });
-                          setDetailTab('overview');
-                        }}
-                        className="min-h-[38px] px-3 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Details</span>
-                      </button>
+                      {/* Action Buttons: Details (opens modal) & Compare (toggles side-by-side dock) */}
+                      <div className="p-3 pt-1 border-t border-slate-100 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailCompound({
+                              baseId: base.id,
+                              profile: effective,
+                            });
+                            setDetailTab('overview');
+                          }}
+                          className="min-h-[38px] px-3 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Details</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleOpenDosageForSubstance(effective.id)}
-                        className="min-h-[38px] px-3 py-1.5 bg-[#F2F2F7] hover:bg-[#E5E5EA] active:scale-[0.98] text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1"
-                      >
-                        <Calculator className="w-3.5 h-3.5 text-[#007AFF]" />
-                        <span>Dosage</span>
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCompare(effective.id)}
+                          className={`min-h-[38px] px-3 py-1.5 active:scale-[0.98] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 border ${
+                            compareList.includes(effective.id)
+                              ? 'bg-purple-50 text-[#8B5CF6] border-purple-300 font-extrabold shadow-2xs'
+                              : 'bg-[#F2F2F7] hover:bg-[#E5E5EA] text-slate-700 border-transparent'
+                          }`}
+                        >
+                          {compareList.includes(effective.id) ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-[#8B5CF6]" />
+                              <span>Selected</span>
+                            </>
+                          ) : (
+                            <>
+                              <ArrowRightLeft className="w-3.5 h-3.5 text-[#007AFF]" />
+                              <span>Compare</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </motion.article>
+                  );
+                })}
+              </AnimatePresence>
+            </motion.div>
           )}
         </>
-      )}
 
       {/* FULL-SCREEN ORGANIZED MODAL FOR FULL DETAILS
           Crucial User Request: Pictures MUST scroll with the details page (not fixed in the middle of screen) */}
@@ -768,7 +838,6 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                   {(
                     [
                       { id: 'overview', label: 'Overview & Feel', icon: BookOpen },
-                      { id: 'dosage', label: 'Dosage & Routes', icon: Calculator },
                       { id: 'pharmacology', label: 'Pharmacology & Ki', icon: FlaskConical },
                       { id: 'clearance', label: 'Clearance & Drug Tests', icon: Clock },
                       { id: 'risks', label: 'Safety & Risks', icon: ShieldAlert },
@@ -796,12 +865,22 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                 {/* Modal Scrollable Body:
                     The pictures are placed INSIDE this scrollable container so they smoothly scroll with the content! */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-                  {/* Photo & Structure Banner (Scrolls naturally with the page content) */}
-                  <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-                    <CannabinoidVisualPicture
-                      compound={profile}
-                      pictureMode="studio_and_structure"
-                    />
+                  {/* Specimen Photo & Interactive 3D Molecular Conformer Workbench */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
+                    <div className="md:col-span-5 h-64 sm:h-72 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-900">
+                      <SubstancePhotoSpecimen
+                        compound={profile}
+                        className="w-full h-full"
+                        showCaption={true}
+                        allowZoom={true}
+                      />
+                    </div>
+                    <div className="md:col-span-7 h-64 sm:h-72">
+                      <ChemicalStructure2D
+                        compound={profile}
+                        variant="modal"
+                      />
+                    </div>
                   </div>
 
                   {/* TAB 1: OVERVIEW & EXPERIENCE */}
@@ -856,42 +935,7 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                         </div>
                       </div>
 
-                      {/* Appearance & Synonyms */}
-                      <div className="p-3.5 bg-[#F2F2F7] rounded-2xl space-y-1.5 text-xs text-slate-700">
-                        <div>
-                          <strong className="text-slate-900">Physical Appearance:</strong>{' '}
-                          {modalRec.physicalAppearance}
-                        </div>
-                        <div>
-                          <strong className="text-slate-900">Synonyms & Brand Names:</strong>{' '}
-                          {profile.synonyms.join(' · ')}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB 2: DOSAGE & ROUTES */}
-                  {detailTab === 'dosage' && (
-                    <div className="space-y-4">
-                      <div className="p-4 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs font-mono font-extrabold uppercase text-emerald-800 flex items-center gap-1.5">
-                            <Calculator className="w-4 h-4 shrink-0" />
-                            <span>Quadruple-Checked Clinical Thresholds</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDosageForSubstance(profile.id)}
-                            className="min-h-[32px] px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs"
-                          >
-                            Open in Dosage Simulator →
-                          </button>
-                        </div>
-                        <p className="text-xs text-emerald-900">
-                          Verified starting thresholds and route guidelines calibrated against forensic toxicology databases.
-                        </p>
-                      </div>
-
+                      {/* Clinical Potency & Starting Thresholds */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                         <div className="p-3 bg-[#F2F2F7] rounded-2xl">
                           <div className="text-[10px] font-mono text-slate-500 uppercase">
@@ -922,12 +966,10 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                             Relative Potency
                           </div>
                           <div className="text-lg font-mono font-extrabold text-slate-900 mt-0.5">
-                            {isCannabinoid
-                              ? `${profile.relativePotencyVsD9}×`
-                              : `${profile.relativePotencyVsD9}× Index`}
+                            {profile.relativePotencyVsD9}×
                           </div>
                           <div className="text-[10px] text-slate-500 mt-0.5">
-                            {isCannabinoid ? 'vs Δ9-THC' : 'vs Baseline'}
+                            Potency index
                           </div>
                         </div>
 
@@ -941,6 +983,18 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                           <div className="text-[10px] text-slate-500 mt-0.5">
                             Oral Plateau
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Appearance & Synonyms */}
+                      <div className="p-3.5 bg-[#F2F2F7] rounded-2xl space-y-1.5 text-xs text-slate-700">
+                        <div>
+                          <strong className="text-slate-900">Physical Appearance:</strong>{' '}
+                          {modalRec.physicalAppearance}
+                        </div>
+                        <div>
+                          <strong className="text-slate-900">Synonyms & Brand Names:</strong>{' '}
+                          {profile.synonyms.join(' · ')}
                         </div>
                       </div>
                     </div>
@@ -1127,11 +1181,25 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => handleOpenDosageForSubstance(profile.id)}
-                      className="min-h-[40px] px-4 py-2 bg-[#007AFF] hover:bg-[#0062CC] text-white text-xs font-bold rounded-xl transition-colors shadow-xs flex items-center gap-1.5"
+                      onClick={() => {
+                        handleToggleCompare(profile.id);
+                        if (!compareList.includes(profile.id) && compareList.length === 1) {
+                          setDetailCompound(null);
+                          setIsCompareModalOpen(true);
+                        }
+                      }}
+                      className={`min-h-[40px] px-4 py-2 text-xs font-bold rounded-xl transition-colors shadow-xs flex items-center gap-1.5 ${
+                        compareList.includes(profile.id)
+                          ? 'bg-purple-100 text-[#8B5CF6] border border-purple-300'
+                          : 'bg-[#007AFF] hover:bg-[#0062CC] text-white'
+                      }`}
                     >
-                      <Calculator className="w-4 h-4" />
-                      <span>Calculate Dosage</span>
+                      <ArrowRightLeft className="w-4 h-4" />
+                      <span>
+                        {compareList.includes(profile.id)
+                          ? 'Selected for Comparison'
+                          : 'Compare Substance'}
+                      </span>
                     </button>
                     <button
                       type="button"
@@ -1146,6 +1214,103 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
             </div>
           );
         })()}
+
+      {/* FLOATING BOTTOM COMPARISON DOCK (Appears when 1 or 2 substances are selected) */}
+      {compareList.length > 0 && (
+        <div className="fixed bottom-16 md:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-lg bg-slate-900/95 text-white backdrop-blur-xl px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center justify-between gap-3 animate-slide-up">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-8 h-8 rounded-xl bg-blue-500/20 text-[#38BDF8] flex items-center justify-center shrink-0">
+              <ArrowRightLeft className="w-4 h-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-[11px] font-mono text-slate-400 uppercase font-semibold">
+                Compare Tray ({compareList.length}/2)
+              </div>
+              <div className="flex items-center gap-1.5 truncate text-xs font-bold mt-0.5">
+                {compareList.map((id, idx) => {
+                  const item = ALL_SUBSTANCES_DATABASE.find((c) => c.id === id);
+                  return (
+                    <span
+                      key={`tray-${id}-${idx}`}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 border border-slate-700 font-mono text-[11px]"
+                    >
+                      {item ? item.shortName : id}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleCompare(id);
+                        }}
+                        className="text-slate-400 hover:text-white"
+                        title="Remove from comparison"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+                {compareList.length === 1 && (
+                  <span className="text-[11px] text-slate-400 font-medium italic">
+                    + Select 2nd substance
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setCompareList([])}
+              className="text-xs text-slate-400 hover:text-slate-200 px-2 py-1 font-medium"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (compareList.length === 1) {
+                  // Pick default secondary if only 1 chosen
+                  const fallbackSecond =
+                    compareList[0] === 'delta9-thc' ? 'cbd' : 'delta9-thc';
+                  setCompareList([compareList[0], fallbackSecond]);
+                }
+                setIsCompareModalOpen(true);
+              }}
+              className="px-3.5 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1"
+            >
+              <span>Compare</span>
+              <ArrowRightLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* SUBSTANCE COMPARE MODAL */}
+      {isCompareModalOpen && compareList.length > 0 && (
+        <SubstanceCompareModal
+          substanceAId={compareList[0]}
+          substanceBId={
+            compareList[1] ||
+            (compareList[0] === 'delta9-thc' ? 'cbd' : 'delta9-thc')
+          }
+          onClose={() => setIsCompareModalOpen(false)}
+          onSwap={() => {
+            if (compareList.length >= 2) {
+              setCompareList([compareList[1], compareList[0]]);
+            }
+          }}
+          onSelectSubstanceA={(id) => {
+            setCompareList((prev) => [id, prev[1] || (id === 'delta9-thc' ? 'cbd' : 'delta9-thc')]);
+          }}
+          onSelectSubstanceB={(id) => {
+            setCompareList((prev) => [prev[0] || 'delta9-thc', id]);
+          }}
+          onLogDose={(subId) => {
+            onLogCannabinoid(subId, activeDerivativeMod);
+          }}
+        />
+      )}
     </div>
   );
 };
