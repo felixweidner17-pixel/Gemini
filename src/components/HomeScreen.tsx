@@ -766,7 +766,7 @@ export const HomeScreen: React.FC = () => {
           <div className="w-full h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={activeBuckets}
+                data={activeBuckets as any}
                 margin={{ top: 12, right: 12, left: -16, bottom: 4 }}
               >
                 <CartesianGrid

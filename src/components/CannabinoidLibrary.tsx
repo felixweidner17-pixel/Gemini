@@ -257,6 +257,55 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
   } | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
 
+  // Gemini AI Expert Consultation Modal State
+  const [geminiModalCompound, setGeminiModalCompound] = useState<{
+    baseId: string;
+    profile: CannabinoidProfile;
+  } | null>(null);
+  const [geminiMessages, setGeminiMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
+  const [geminiInput, setGeminiInput] = useState('');
+  const [isGeminiLoading, setIsGeminiLoading] = useState(false);
+
+  const handleSendGeminiMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!geminiInput.trim() || isGeminiLoading || !geminiModalCompound) return;
+
+    const userMsg = geminiInput.trim();
+    setGeminiInput('');
+    const newHistory = [...geminiMessages, { role: 'user' as const, text: userMsg }];
+    setGeminiMessages(newHistory);
+    setIsGeminiLoading(true);
+
+    try {
+      const substanceContext = `[Context: User is asking about substance "${geminiModalCompound.profile.shortName}" (${geminiModalCompound.profile.name}), classification: ${geminiModalCompound.profile.classification}, summary: ${geminiModalCompound.profile.summary}, half-life: ${geminiModalCompound.profile.terminalHalfLifeHours}h, relative potency vs D9: ${geminiModalCompound.profile.relativePotencyVsD9}x, risk tier: ${geminiModalCompound.profile.riskTier}, oral threshold: ${geminiModalCompound.profile.baseOralThresholdMg}mg, XLogP: ${geminiModalCompound.profile.xLogP}, pubchem CID: ${geminiModalCompound.profile.pubchemCid}, pharmacology notes: ${geminiModalCompound.profile.pharmacologyNotes}].`;
+
+      const fullPrompt = `${substanceContext}\n\nUser Question: ${userMsg}`;
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: fullPrompt,
+          history: newHistory.slice(0, -1).map(m => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }]
+          }))
+        })
+      });
+
+      const data = await res.json();
+      if (data.text) {
+        setGeminiMessages(prev => [...prev, { role: 'assistant', text: data.text }]);
+      } else {
+        setGeminiMessages(prev => [...prev, { role: 'assistant', text: 'Sorry, I encountered an error communicating with Gemini.' }]);
+      }
+    } catch (err) {
+      setGeminiMessages(prev => [...prev, { role: 'assistant', text: 'Network error connecting to Gemini API.' }]);
+    } finally {
+      setIsGeminiLoading(false);
+    }
+  };
+
   // Subcategories matching the active category
   const availableSubcategories: SubcategoryPill[] =
     macroFilter === 'All' ? [] : MACRO_SUBCATEGORY_MAP[macroFilter] || [];
@@ -732,8 +781,8 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                         </div>
                       </div>
 
-                      {/* Action Buttons: Details (opens modal) & Compare (toggles side-by-side dock) */}
-                      <div className="p-3 pt-1 border-t border-slate-100 grid grid-cols-2 gap-2">
+                      {/* Action Buttons: Details, Gemini, and Compare */}
+                      <div className="p-3 pt-1 border-t border-slate-100 grid grid-cols-3 gap-1.5">
                         <button
                           type="button"
                           onClick={() => {
@@ -743,7 +792,7 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
                             });
                             setDetailTab('overview');
                           }}
-                          className="min-h-[38px] px-3 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs"
+                          className="min-h-[38px] px-2 py-1.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>Details</span>
@@ -751,8 +800,28 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
 
                         <button
                           type="button"
+                          onClick={() => {
+                            setGeminiModalCompound({
+                              baseId: base.id,
+                              profile: effective,
+                            });
+                            setGeminiMessages([
+                              {
+                                role: 'assistant',
+                                text: `Hello! I am your Gemini harm-reduction and clinical pharmacology expert powered by Gemini 3.8 Flash. I have full knowledge of **${effective.shortName}** (${effective.name}, Class: ${effective.classification}, Risk: ${effective.riskTier}, Half-Life: ${effective.terminalHalfLifeHours}h, Potency vs D9: ${effective.relativePotencyVsD9}x). What would you like to know or discuss regarding its pharmacology, clearance, or harm reduction?`
+                              }
+                            ]);
+                          }}
+                          className="min-h-[38px] px-2 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-[0.98] text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                          <span>Gemini</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => handleToggleCompare(effective.id)}
-                          className={`min-h-[38px] px-3 py-1.5 active:scale-[0.98] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 border ${
+                          className={`min-h-[38px] px-2 py-1.5 active:scale-[0.98] text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1 border ${
                             compareList.includes(effective.id)
                               ? 'bg-purple-50 text-[#8B5CF6] border-purple-300 font-extrabold shadow-2xs'
                               : 'bg-[#F2F2F7] hover:bg-[#E5E5EA] text-slate-700 border-transparent'
@@ -1310,6 +1379,110 @@ export const CannabinoidLibrary: React.FC<CannabinoidLibraryProps> = ({
             onLogCannabinoid(subId, activeDerivativeMod);
           }}
         />
+      )}
+
+      {/* GEMINI AI EXPERT CONSULTATION MODAL */}
+      {geminiModalCompound && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
+            onClick={() => setGeminiModalCompound(null)}
+          />
+          <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[85vh]">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-extrabold">
+                    Gemini Expert · {geminiModalCompound.profile.shortName}
+                  </h3>
+                  <p className="text-[11px] font-mono text-slate-400">
+                    {geminiModalCompound.profile.classification} · Powered by Gemini 3.8 Flash
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGeminiModalCompound(null)}
+                className="p-1.5 rounded-full bg-slate-800 text-slate-300 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Chat Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/50">
+              {geminiMessages.map((msg, mIdx) => (
+                <div
+                  key={`gemini-msg-${mIdx}`}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-[#007AFF] text-white font-medium shadow-xs'
+                        : 'bg-white text-slate-800 border border-slate-200/80 shadow-xs'
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {isGeminiLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white border border-slate-200/80 rounded-2xl px-4 py-3 text-xs text-slate-500 flex items-center gap-2 shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+                    <span>Gemini is analyzing full pharmacological & clearance profile...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Prompt Chips */}
+            <div className="px-4 py-2 bg-white border-t border-slate-100 flex flex-wrap gap-1.5 text-[11px]">
+              <span className="text-slate-400 font-mono text-[10px] self-center">Ask:</span>
+              {[
+                'What are the primary toxicity risks?',
+                'How long is the clearance window?',
+                'Receptor binding & Ki profile?',
+                'Harm reduction precautions?'
+              ].map((qPrompt, qIdx) => (
+                <button
+                  key={`prompt-${qIdx}`}
+                  type="button"
+                  onClick={() => setGeminiInput(qPrompt)}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors"
+                >
+                  {qPrompt}
+                </button>
+              ))}
+            </div>
+
+            {/* Chat Input Form */}
+            <form
+              onSubmit={handleSendGeminiMessage}
+              className="p-3 bg-white border-t border-slate-200 flex items-center gap-2"
+            >
+              <input
+                type="text"
+                value={geminiInput}
+                onChange={(e) => setGeminiInput(e.target.value)}
+                placeholder={`Ask Gemini anything about ${geminiModalCompound.profile.shortName}...`}
+                className="flex-1 min-h-[40px] px-3.5 py-2 bg-[#F2F2F7] rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#007AFF]"
+              />
+              <button
+                type="submit"
+                disabled={!geminiInput.trim() || isGeminiLoading}
+                className="min-h-[40px] px-4 py-2 bg-[#007AFF] hover:bg-[#0062CC] disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-xs shrink-0"
+              >
+                Send
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
